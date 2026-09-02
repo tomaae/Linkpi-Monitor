@@ -66,7 +66,29 @@ if ($LASTEXITCODE -ne 0) {
     throw "LinkPi Monitor publish failed with exit code $LASTEXITCODE."
 }
 
+$stagingPrefix = $stagingRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) +
+    [IO.Path]::DirectorySeparatorChar
+$unneededVlcLibraries = @(
+    (Join-Path $stagingRoot "libvlc\win-x64\libvlc.lib"),
+    (Join-Path $stagingRoot "libvlc\win-x64\libvlccore.lib")
+)
+
+foreach ($libraryPath in $unneededVlcLibraries) {
+    $validatedLibraryPath = [IO.Path]::GetFullPath($libraryPath)
+    if (-not $validatedLibraryPath.StartsWith(
+        $stagingPrefix,
+        [StringComparison]::OrdinalIgnoreCase
+    ) -or [IO.Path]::GetExtension($validatedLibraryPath) -ne ".lib") {
+        throw "LibVLC cleanup path validation failed: $validatedLibraryPath"
+    }
+
+    if (Test-Path -LiteralPath $validatedLibraryPath -PathType Leaf) {
+        Remove-Item -LiteralPath $validatedLibraryPath
+    }
+}
+
 Copy-Item -LiteralPath (Join-Path $workspaceRoot "LICENSE") -Destination $stagingRoot
+Copy-Item -LiteralPath (Join-Path $workspaceRoot "THIRD-PARTY-NOTICES.txt") -Destination $stagingRoot
 
 $forbiddenPackagedConfigPath = Join-Path $stagingRoot "config.json"
 if (Test-Path -LiteralPath $forbiddenPackagedConfigPath) {
@@ -75,21 +97,42 @@ if (Test-Path -LiteralPath $forbiddenPackagedConfigPath) {
 
 $expectedFiles = @(
     "Linkpi Monitor.exe",
-    "LICENSE"
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.txt"
 )
 
 $publishedFiles = @(Get-ChildItem -LiteralPath $stagingRoot -File -Recurse)
-$unexpectedFiles = @($publishedFiles |
-    Where-Object { $_.DirectoryName -ne $stagingRoot -or $_.Name -notin $expectedFiles })
+$unexpectedFiles = @($publishedFiles | Where-Object {
+    $relativePath = [IO.Path]::GetRelativePath($stagingRoot, $_.FullName)
+    $_.DirectoryName -ne $stagingRoot -and
+        -not $relativePath.StartsWith("libvlc\win-x64\", [StringComparison]::OrdinalIgnoreCase)
+})
+$unexpectedRootFiles = @($publishedFiles | Where-Object {
+    $_.DirectoryName -eq $stagingRoot -and $_.Name -notin $expectedFiles
+})
 $missingFiles = @($expectedFiles |
     Where-Object { -not (Test-Path -LiteralPath (Join-Path $stagingRoot $_) -PathType Leaf) })
+$requiredVlcFiles = @(
+    "libvlc\win-x64\libvlc.dll",
+    "libvlc\win-x64\libvlccore.dll",
+    "libvlc\win-x64\plugins\access\liblive555_plugin.dll",
+    "libvlc\win-x64\plugins\codec\libavcodec_plugin.dll",
+    "libvlc\win-x64\plugins\video_output\libdirect3d11_plugin.dll"
+)
+$missingVlcFiles = @($requiredVlcFiles |
+    Where-Object { -not (Test-Path -LiteralPath (Join-Path $stagingRoot $_) -PathType Leaf) })
 
-if ($unexpectedFiles.Count -gt 0) {
-    throw "Unexpected publish files: $($unexpectedFiles.FullName -join ', ')"
+if ($unexpectedFiles.Count -gt 0 -or $unexpectedRootFiles.Count -gt 0) {
+    $unexpectedPaths = @($unexpectedFiles.FullName) + @($unexpectedRootFiles.FullName)
+    throw "Unexpected publish files: $($unexpectedPaths -join ', ')"
 }
 
 if ($missingFiles.Count -gt 0) {
     throw "Missing publish files: $($missingFiles -join ', ')"
+}
+
+if ($missingVlcFiles.Count -gt 0) {
+    throw "Missing LibVLC runtime files: $($missingVlcFiles -join ', ')"
 }
 
 if (Test-Path -LiteralPath $temporaryArchivePath) {
@@ -113,8 +156,9 @@ Move-Item -LiteralPath $temporaryArchivePath -Destination $archivePath
 
 $publishRootLocked = $false
 if (Test-Path -LiteralPath $publishRoot) {
-    foreach ($fileName in $expectedFiles) {
-        $existingFilePath = Join-Path $publishRoot $fileName
+    foreach ($publishedFile in $publishedFiles) {
+        $relativePath = [IO.Path]::GetRelativePath($stagingRoot, $publishedFile.FullName)
+        $existingFilePath = Join-Path $publishRoot $relativePath
         if (-not (Test-Path -LiteralPath $existingFilePath -PathType Leaf)) {
             continue
         }
@@ -153,9 +197,12 @@ else {
 }
 
 Write-Host "Publish completed and audited: $currentExtractedPackage"
-Get-ChildItem -LiteralPath $currentExtractedPackage -File |
-    Sort-Object Name |
-    Select-Object Name, Length
+$packagedFiles = @(Get-ChildItem -LiteralPath $currentExtractedPackage -File -Recurse)
+$packageSize = ($packagedFiles | Measure-Object -Property Length -Sum).Sum
+[PSCustomObject]@{
+    Files = $packagedFiles.Count
+    SizeMB = [Math]::Round($packageSize / 1MB, 1)
+}
 Write-Host "Package archive: $archivePath"
 Get-Item -LiteralPath $archivePath |
     Select-Object Name, Length

@@ -8,7 +8,7 @@ A read-only Windows monitor for LinkPi encoder devices, built with C# and .NET 1
 - Poll CPU, memory, temperature, channel configuration, physical-input state and push state.
 - Present decode, encode and stream output details together for every channel.
 - Keep HDMI, USB camera, file, color-key and Mix channels visible alongside network decoders.
-- Open an advertised RTSP or HTTP stream through the Windows registered media player.
+- Watch an advertised RTSP stream directly inside LinkPi Monitor.
 - Show publishing status and bitrate without exposing stream keys.
 - Display planned editing controls in a disabled state.
 
@@ -40,7 +40,7 @@ Only the selected device is polled. Existing legacy configuration using a single
 dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 ```
 
-The Watch button opens the preferred advertised RTSP stream. A player such as VLC must be installed and registered for the `rtsp` protocol.
+The Watch button opens the live feed in a dedicated embedded player window. The required LibVLC runtime is included in published packages; a separately installed media player is not required.
 
 ## Create a release package
 

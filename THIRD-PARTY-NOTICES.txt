@@ -1,0 +1,14 @@
+LinkPi Monitor includes the following third-party software:
+
+LibVLCSharp
+Copyright (c) VideoLAN and LibVLCSharp contributors
+Licensed under the GNU Lesser General Public License, version 2.1 or later.
+Source and license information: https://code.videolan.org/videolan/LibVLCSharp
+
+LibVLC
+Copyright (c) VideoLAN and VLC authors
+Licensed under the GNU Lesser General Public License, version 2.1 or later.
+Source and license information: https://www.videolan.org/vlc/libvlc.html
+
+These components remain under their respective licenses. LinkPi Monitor uses them
+as dynamically loaded libraries for local media playback.

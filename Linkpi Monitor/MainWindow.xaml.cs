@@ -2,7 +2,6 @@
 using System.Windows;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -200,14 +199,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        try
-        {
-            Process.Start(new ProcessStartInfo(channel.WatchUri.AbsoluteUri) { UseShellExecute = true });
-        }
-        catch (Exception exception)
-        {
-            ErrorMessage = $"No application could open the stream. Install or associate a player such as VLC. {exception.Message}";
-        }
+        new WatchWindow(channel) { Owner = this }.Show();
     }
 
     private void ConfigurationButton_Click(object sender, RoutedEventArgs e)
