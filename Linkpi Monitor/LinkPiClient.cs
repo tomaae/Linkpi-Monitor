@@ -36,12 +36,13 @@ public sealed class LinkPiClient : IDisposable
         var inputTask = InvokeRpcAsync("RPC", "enc.getInputState", cancellationToken);
         var epgTask = InvokeRpcAsync("RPC", "enc.getEPG", cancellationToken);
         var pushStateTask = InvokeRpcAsync("RPC", "push.getState", cancellationToken);
+        var hardwareTask = GetOptionalJsonAsync("config/hardware.json", cancellationToken);
 
-        await Task.WhenAll(configTask, pushConfigTask, systemTask, inputTask, epgTask, pushStateTask)
+        await Task.WhenAll(configTask, pushConfigTask, systemTask, inputTask, epgTask, pushStateTask, hardwareTask)
             .ConfigureAwait(false);
 
         var system = await systemTask;
-        var channels = ParseChannels(await configTask, await inputTask, await epgTask);
+        var channels = ParseChannels(await configTask, await inputTask, await epgTask, await hardwareTask);
         await LoadPreviewImagesAsync(channels, cancellationToken).ConfigureAwait(false);
         var pushState = await pushStateTask;
 
@@ -62,6 +63,20 @@ public sealed class LinkPiClient : IDisposable
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return document.RootElement.Clone();
+    }
+
+    private async Task<JsonElement> GetOptionalJsonAsync(string relativeUrl, CancellationToken cancellationToken)
+    {
+        using var response = await _httpClient.GetAsync(relativeUrl, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return default;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         return document.RootElement.Clone();
     }
 
@@ -94,7 +109,8 @@ public sealed class LinkPiClient : IDisposable
     private IReadOnlyList<ChannelDisplay> ParseChannels(
         JsonElement config,
         JsonElement inputState,
-        JsonElement epg)
+        JsonElement epg,
+        JsonElement hardware)
     {
         var inputAvailability = inputState.ValueKind == JsonValueKind.Array
             ? inputState.EnumerateArray().ToDictionary(
@@ -106,13 +122,19 @@ public sealed class LinkPiClient : IDisposable
             ? epg.EnumerateArray().ToDictionary(item => GetInt(item, "id", -1))
             : [];
 
-        var channels = new List<ChannelDisplay>();
         if (config.ValueKind != JsonValueKind.Array)
         {
-            return channels;
+            return [];
         }
 
-        foreach (var channel in config.EnumerateArray())
+        var configuredChannels = config.EnumerateArray().ToArray();
+        var audioSources = BuildAudioSourceOptions(configuredChannels);
+        var encodeCapabilities = GetObject(GetObject(hardware, "capability"), "encode");
+        var supports4K = GetString(encodeCapabilities, "maxSize").Contains("4K", StringComparison.OrdinalIgnoreCase);
+        var supportsBFrames = GetBool(encodeCapabilities, "BFrame");
+        var channels = new List<ChannelDisplay>(configuredChannels.Length);
+
+        foreach (var channel in configuredChannels)
         {
             var id = GetInt(channel, "id", channels.Count);
             var name = GetString(channel, "name", $"Channel {id}");
@@ -140,11 +162,255 @@ public sealed class LinkPiClient : IDisposable
                     : canPreview ? "Loading snapshot…" : "Preview unavailable",
                 WatchUri = enabled ? GetWatchUri(epgEntry) : null,
                 IsEnabled = enabled,
-                CanPreview = canPreview
+                CanPreview = canPreview,
+                Configuration = ParseChannelConfiguration(channel, audioSources, supports4K, supportsBFrames)
             });
         }
 
         return channels;
+    }
+
+    private static ChannelConfiguration ParseChannelConfiguration(
+        JsonElement channel,
+        IReadOnlyList<SelectionOption> audioSources,
+        bool supports4K,
+        bool supportsBFrames)
+    {
+        var type = GetString(channel, "type");
+        var net = GetObject(channel, "net");
+        var cap = GetObject(channel, "cap");
+        var crop = GetObject(cap, "crop");
+
+        return new ChannelConfiguration
+        {
+            Decode = new DecodeConfiguration
+            {
+                IsNetworkSource = type.Equals("net", StringComparison.OrdinalIgnoreCase),
+                SourceUrl = GetString(net, "path"),
+                InputFramerate = GetString(net, "framerate", "-1"),
+                Protocol = GetString(net, "protocol", "tcp"),
+                BufferMode = GetString(net, "bufferMode", "0"),
+                MinimumDelay = GetString(net, "minDelay", "500"),
+                DecodeVideo = GetBool(net, "decodeV"),
+                DecodeAudio = GetBool(net, "decodeA"),
+                Rotate = GetString(cap, "rotate", "0"),
+                CropLeft = GetString(crop, "L", "0"),
+                CropTop = GetString(crop, "T", "0"),
+                CropRight = GetString(crop, "R", "0"),
+                CropBottom = GetString(crop, "B", "0"),
+                Deinterlace = GetBool(cap, "deinterlace"),
+                Contrast = GetString(cap, "contrast", "0")
+            },
+            MainEncoder = ParseEncoder(GetObject(channel, "encv"), GetBool(channel, "enable"), supports4K, supportsBFrames),
+            SubEncoder = ParseEncoder(GetObject(channel, "encv2"), GetBool(channel, "enable2"), supports4K, supportsBFrames),
+            Audio = ParseAudioEncoder(GetObject(channel, "enca"), audioSources),
+            MainStream = ParseStreamOutput(GetObject(channel, "stream")),
+            SubStream = ParseStreamOutput(GetObject(channel, "stream2")),
+            Hls = ParseHls(GetObject(channel, "hls")),
+            Transport = ParseTransportStream(GetObject(channel, "ts")),
+            Ndi = ParseNdi(GetObject(channel, "ndi"))
+        };
+    }
+
+    private static EncoderConfiguration ParseEncoder(
+        JsonElement encoder,
+        bool enabled,
+        bool supports4K,
+        bool supportsBFrames)
+    {
+        var width = GetString(encoder, "width", "-1");
+        var height = GetString(encoder, "height", "-1");
+        var size = $"{width}x{height}";
+        var timestampMode = GetString(encoder, "syncTSMode", "linkpi");
+
+        return new EncoderConfiguration
+        {
+            Enabled = enabled,
+            VideoSize = size,
+            VideoSizes = BuildVideoSizeOptions(size, supports4K),
+            VideoFormat = $"{GetString(encoder, "codec", "close")},{GetString(encoder, "profile", "base")}",
+            RateControl = GetString(encoder, "rcmode", "cbr"),
+            Bitrate = GetString(encoder, "bitrate"),
+            Framerate = GetString(encoder, "framerate", "-1"),
+            Gop = GetString(encoder, "gop", "1"),
+            LowLatency = GetBool(encoder, "lowLatency"),
+            GopMode = GetString(encoder, "gopmode", "0"),
+            GopModes = BuildGopModeOptions(supportsBFrames),
+            MinimumQp = GetString(encoder, "minqp", "22"),
+            MaximumQp = GetString(encoder, "maxqp", "36"),
+            FixedIQp = GetString(encoder, "Iqp", "25"),
+            FixedPQp = GetString(encoder, "Pqp", "25"),
+            TimestampMode = $"{GetBool(encoder, "syncTS").ToString().ToLowerInvariant()},{timestampMode}"
+        };
+    }
+
+    private static AudioEncoderConfiguration ParseAudioEncoder(
+        JsonElement audio,
+        IReadOnlyList<SelectionOption> sourceOptions)
+    {
+        var currentSource = GetString(audio, "audioSrc");
+        return new AudioEncoderConfiguration
+        {
+            Codec = GetString(audio, "codec", "close"),
+            Source = currentSource,
+            Sources = EnsureOption(sourceOptions, currentSource, $"Source {currentSource}"),
+            Gain = GetString(audio, "gain", "0"),
+            SampleRate = GetString(audio, "samplerate", "-1"),
+            Channels = GetString(audio, "channels", "2"),
+            Bitrate = GetString(audio, "bitrate")
+        };
+    }
+
+    private static StreamOutputConfiguration ParseStreamOutput(JsonElement stream)
+    {
+        var rtsp = GetObject(stream, "rtsp");
+        var srt = GetObject(stream, "srt");
+        var udp = GetObject(stream, "udp");
+        var rist = GetObject(stream, "rist");
+        var push = GetObject(stream, "push");
+
+        return new StreamOutputConfiguration
+        {
+            Http = GetBool(stream, "http"),
+            Hls = GetBool(stream, "hls"),
+            Rtmp = GetBool(stream, "rtmp"),
+            WebRtc = GetBool(stream, "webrtc"),
+            Suffix = GetString(stream, "suffix"),
+            Rtsp = new RtspConfiguration
+            {
+                Enabled = rtsp.ValueKind == JsonValueKind.Object
+                    ? GetBool(rtsp, "enable")
+                    : IsEnabled(rtsp),
+                Username = GetString(rtsp, "name"),
+                Password = GetString(rtsp, "passwd"),
+                Authentication = GetBool(rtsp, "auth"),
+                Onvif = GetBool(rtsp, "onvif")
+            },
+            Srt = new SrtConfiguration
+            {
+                Enabled = GetBool(srt, "enable"),
+                Mode = GetString(srt, "mode", "listener"),
+                IpAddress = GetString(srt, "ip"),
+                StreamId = GetString(srt, "streamid"),
+                Port = GetString(srt, "port"),
+                Latency = GetString(srt, "latency"),
+                Password = GetString(srt, "passwd")
+            },
+            Udp = new UdpConfiguration
+            {
+                Enabled = GetBool(udp, "enable"),
+                IpAddress = GetString(udp, "ip"),
+                Port = GetString(udp, "port"),
+                Ttl = GetString(udp, "ttl", "5"),
+                FlowControl = GetBool(udp, "flowCtrl"),
+                Bandwidth = GetString(udp, "bandwidth", "100"),
+                RtpHeader = GetBool(udp, "rtp")
+            },
+            Rist = new RistConfiguration
+            {
+                Enabled = GetBool(rist, "enable"),
+                IpAddress = GetString(rist, "ip"),
+                Port = GetString(rist, "port")
+            },
+            Push = new PushStreamConfiguration
+            {
+                Enabled = GetBool(push, "enable"),
+                Url = GetString(push, "path"),
+                Format = GetString(push, "format", "auto"),
+                HevcId = GetString(push, "hevc_id", "12"),
+                Compatibility = GetString(push, "flvflags")
+            }
+        };
+    }
+
+    private static HlsConfiguration ParseHls(JsonElement hls) => new()
+    {
+        SegmentLength = GetString(hls, "hls_time"),
+        ListLength = GetString(hls, "hls_list_size"),
+        BaseUrl = GetString(hls, "hls_base_url"),
+        Filename = GetString(hls, "hls_filename")
+    };
+
+    private static TransportStreamConfiguration ParseTransportStream(JsonElement transport) => new()
+    {
+        PacketSize = GetString(transport, "tsSize", "1316"),
+        Pid = GetString(transport, "mpegts_start_pid"),
+        PmtPid = GetString(transport, "mpegts_pmt_start_pid"),
+        ServiceId = GetString(transport, "mpegts_service_id"),
+        StreamId = GetString(transport, "mpegts_transport_stream_id"),
+        NetworkId = GetString(transport, "mpegts_original_network_id")
+    };
+
+    private static NdiConfiguration ParseNdi(JsonElement ndi) => new()
+    {
+        Enabled = GetBool(ndi, "enable"),
+        Name = GetString(ndi, "name"),
+        Group = GetString(ndi, "group")
+    };
+
+    private static IReadOnlyList<SelectionOption> BuildAudioSourceOptions(IEnumerable<JsonElement> channels)
+    {
+        var options = new List<SelectionOption>
+        {
+            new("source", "Source default"),
+            new("line", "Line input"),
+            new("usbAlsa", "USB microphone")
+        };
+
+        options.AddRange(channels.Select(channel => new SelectionOption(
+            GetString(channel, "id"),
+            GetString(channel, "name", $"Channel {GetString(channel, "id")}"))));
+        return options;
+    }
+
+    private static IReadOnlyList<SelectionOption> BuildVideoSizeOptions(string current, bool supports4K)
+    {
+        var standard = new List<SelectionOption>
+        {
+            new("-1x-1", "Automatic"),
+            new("1920x1080", "1080p (1920×1080)"),
+            new("1280x720", "720p (1280×720)"),
+            new("640x360", "360p (640×360)"),
+            new("1080x1920", "Portrait 1080×1920"),
+            new("720x1280", "Portrait 720×1280"),
+            new("360x640", "Portrait 360×640")
+        };
+
+        if (supports4K)
+        {
+            standard.Insert(1, new SelectionOption("3840x2160", "4K (3840×2160)"));
+        }
+
+        return EnsureOption(standard, current, current.Replace('x', '×'));
+    }
+
+    private static IReadOnlyList<SelectionOption> BuildGopModeOptions(bool supportsBFrames)
+    {
+        var modes = new List<SelectionOption>
+        {
+            new("0", "Normal"),
+            new("1", "SmartP"),
+            new("2", "DualP")
+        };
+        if (supportsBFrames)
+        {
+            modes.Add(new SelectionOption("3", "BiPredB"));
+        }
+
+        return modes;
+    }
+
+    private static IReadOnlyList<SelectionOption> EnsureOption(
+        IReadOnlyList<SelectionOption> options,
+        string value,
+        string label)
+    {
+        if (string.IsNullOrWhiteSpace(value) || options.Any(option => option.Value == value))
+        {
+            return options;
+        }
+
+        return [.. options, new SelectionOption(value, label)];
     }
 
     private async Task LoadPreviewImagesAsync(

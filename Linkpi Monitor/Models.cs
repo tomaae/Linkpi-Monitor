@@ -30,6 +30,7 @@ public sealed class ChannelDisplay
     public bool CanWatch => WatchUri is not null;
     public bool IsEnabled { get; init; }
     public bool CanPreview { get; init; }
+    public required ChannelConfiguration Configuration { get; init; }
 }
 
 public sealed class PushDisplay
