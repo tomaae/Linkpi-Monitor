@@ -112,7 +112,9 @@
                                                     <Grid>
                                                         <TextBlock Text="{Binding Initial}" Foreground="#24303C" FontSize="68" FontWeight="Bold"
                                                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        <Image Source="{Binding PreviewImage}" Stretch="Uniform" />
+                                                        <Image Source="{Binding PreviewImage}" Stretch="Fill"
+                                                               Width="{Binding PreviewRenderWidth}" Height="{Binding PreviewRenderHeight}"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                         <Border VerticalAlignment="Bottom" Background="#CC11171E" Padding="12,9">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">

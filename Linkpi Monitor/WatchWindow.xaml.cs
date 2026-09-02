@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using LibVLCSharp.Shared;
 using VlcMediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
@@ -14,7 +13,6 @@ public partial class WatchWindow : Window
     private static readonly Brush AccentBrush = CreateBrush("#F5B82E");
     private static readonly Brush AccentTextBrush = CreateBrush("#1C1608");
     private const double HeaderHeight = 64;
-    private const double FallbackAspectRatio = 16d / 9d;
     private const double PreferredVideoHeight = 596;
     private const double PreferredVideoWidth = 1060;
 
@@ -37,7 +35,10 @@ public partial class WatchWindow : Window
         }
 
         _streamUri = channel.WatchUri;
-        (_videoAspectRatio, _hasConfiguredAspectRatio, _vlcAspectRatio) = GetInitialAspectRatio(channel);
+        var geometry = VideoGeometry.FromChannel(channel);
+        _videoAspectRatio = geometry.AspectRatio;
+        _hasConfiguredAspectRatio = geometry.IsKnown;
+        _vlcAspectRatio = geometry.VlcAspectRatio;
         SizeWindowForAspectRatio();
         Title = $"{channel.Name} — LinkPi Monitor";
         ChannelNameText.Text = channel.Name;
@@ -169,72 +170,6 @@ public partial class WatchWindow : Window
             ResizeVideoToAspectRatio();
         });
     }
-
-    private static (double AspectRatio, bool IsConfigured, string? VlcAspectRatio) GetInitialAspectRatio(
-        ChannelDisplay channel)
-    {
-        var width = channel.SourceWidth;
-        var height = channel.SourceHeight;
-        if ((width <= 0 || height <= 0) &&
-            TryParseVideoSize(channel.Configuration.MainEncoder.VideoSize, out var encodedWidth, out var encodedHeight))
-        {
-            width = encodedWidth;
-            height = encodedHeight;
-        }
-
-        if ((width <= 0 || height <= 0) &&
-            channel.PreviewImage is BitmapSource { PixelWidth: > 0, PixelHeight: > 0 } preview)
-        {
-            width = preview.PixelWidth;
-            height = preview.PixelHeight;
-        }
-
-        if (width > 0 && height > 0)
-        {
-            var decode = channel.Configuration.Decode;
-            var croppedWidth = width - ParseCrop(decode.CropLeft) - ParseCrop(decode.CropRight);
-            var croppedHeight = height - ParseCrop(decode.CropTop) - ParseCrop(decode.CropBottom);
-            width = croppedWidth > 0 ? croppedWidth : width;
-            height = croppedHeight > 0 ? croppedHeight : height;
-
-            if (ParseRotation(decode.Rotate) is 90 or 270)
-            {
-                (width, height) = (height, width);
-            }
-
-            var divisor = GreatestCommonDivisor(width, height);
-            return ((double)width / height, true, $"{width / divisor}:{height / divisor}");
-        }
-
-        return (FallbackAspectRatio, false, null);
-    }
-
-    private static bool TryParseVideoSize(string value, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-        var separator = value.IndexOf('x', StringComparison.OrdinalIgnoreCase);
-        return separator > 0 &&
-               int.TryParse(value[..separator], out width) &&
-               int.TryParse(value[(separator + 1)..], out height) &&
-               width > 0 && height > 0;
-    }
-
-    private static int GreatestCommonDivisor(int left, int right)
-    {
-        while (right != 0)
-        {
-            (left, right) = (right, left % right);
-        }
-
-        return Math.Max(1, left);
-    }
-
-    private static int ParseCrop(string value) =>
-        int.TryParse(value, out var parsed) ? Math.Max(0, parsed) : 0;
-
-    private static int ParseRotation(string value) =>
-        int.TryParse(value, out var parsed) ? ((parsed % 360) + 360) % 360 : 0;
 
     private void SetPlaybackStatus(string text, Brush brush)
     {

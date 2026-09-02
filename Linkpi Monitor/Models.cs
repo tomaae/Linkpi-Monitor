@@ -33,6 +33,8 @@ public sealed class ChannelDisplay
     public int SourceWidth { get; init; }
     public int SourceHeight { get; init; }
     public required ChannelConfiguration Configuration { get; init; }
+    public double PreviewRenderWidth => VideoGeometry.FromChannel(this).FitWithin(365, 170).Width;
+    public double PreviewRenderHeight => VideoGeometry.FromChannel(this).FitWithin(365, 170).Height;
 }
 
 public sealed class PushDisplay
