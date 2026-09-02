@@ -69,6 +69,13 @@
         <Style TargetType="TabControl">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabControl">
@@ -77,10 +84,9 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <TabPanel Grid.Row="0"
-                                      IsItemsHost="True"
-                                      Panel.ZIndex="1"
-                                      Margin="0,1,0,10" />
+                            <ItemsPresenter Grid.Row="0"
+                                            Panel.ZIndex="1"
+                                            Margin="0,1,0,10" />
                             <ContentPresenter x:Name="PART_SelectedContentHost"
                                               Grid.Row="1"
                                               ContentSource="SelectedContent" />
