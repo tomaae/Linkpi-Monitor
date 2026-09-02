@@ -35,7 +35,13 @@
                     <StackPanel Margin="0,0,12,0">
                         <TextBlock Text="DEVICE" Foreground="{StaticResource MutedTextBrush}" FontSize="10" FontWeight="SemiBold" />
                         <ComboBox x:Name="DevicePicker" Width="230" Margin="0,3,0,0" ItemsSource="{Binding Devices}"
-                                  DisplayMemberPath="Name" SelectionChanged="DevicePicker_SelectionChanged" />
+                                  SelectionChanged="DevicePicker_SelectionChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" Foreground="#11161C" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
                     <Button Content="Add device" IsEnabled="False" Margin="0,18,8,0"
                             ToolTip="Device editing is planned but not implemented yet." />
