@@ -129,7 +129,9 @@ public sealed class LinkPiClient : IDisposable
             return [];
         }
 
-        var configuredChannels = config.EnumerateArray().ToArray();
+        var configuredChannels = config.EnumerateArray()
+            .Where(IsUserFacingChannel)
+            .ToArray();
         var audioSources = BuildAudioSourceOptions(configuredChannels);
         var encodeCapabilities = GetObject(GetObject(hardware, "capability"), "encode");
         var supports4K = GetString(encodeCapabilities, "maxSize").Contains("4K", StringComparison.OrdinalIgnoreCase);
@@ -173,6 +175,14 @@ public sealed class LinkPiClient : IDisposable
         }
 
         return channels;
+    }
+
+    private static bool IsUserFacingChannel(JsonElement channel)
+    {
+        var type = GetString(channel, "type");
+        return !type.Equals("file", StringComparison.OrdinalIgnoreCase) &&
+               !type.Equals("fine", StringComparison.OrdinalIgnoreCase) &&
+               !type.Equals("colorKey", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ChannelConfiguration ParseChannelConfiguration(
