@@ -93,6 +93,7 @@
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Panel.ZIndex" Value="0" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Padding" Value="18,10" />
@@ -100,26 +101,31 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
-                        <Border x:Name="TabBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{StaticResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="{TemplateBinding Padding}"
-                                TextElement.Foreground="{TemplateBinding Foreground}">
-                            <ContentPresenter ContentSource="Header"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                        </Border>
+                        <Grid Margin="0,0,1,0" SnapsToDevicePixels="True">
+                            <Rectangle x:Name="TabShape"
+                                       Fill="{TemplateBinding Background}"
+                                       Stroke="{StaticResource BorderBrush}"
+                                       StrokeThickness="1"
+                                       RadiusX="8"
+                                       RadiusY="8" />
+                            <TextBlock Text="{TemplateBinding Header}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Margin="{TemplateBinding Padding}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#27313D" />
+                                <Setter TargetName="TabShape" Property="Fill" Value="#27313D" />
                                 <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource AccentBrush}" />
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="TabShape" Property="Fill" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="TabShape" Property="Stroke" Value="{StaticResource AccentBrush}" />
                                 <Setter Property="Foreground" Value="#1C1608" />
+                                <Setter Property="Panel.ZIndex" Value="10" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
