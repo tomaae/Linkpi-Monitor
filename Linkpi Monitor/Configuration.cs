@@ -13,14 +13,23 @@ public sealed class AppSettings
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
         if (!File.Exists(configPath))
         {
-            configPath = Path.Combine(Environment.CurrentDirectory, "config.json");
-        }
-
-        if (!File.Exists(configPath))
-        {
-            throw new FileNotFoundException(
-                "config.json was not found. Copy config.example.json to config.json and add at least one LinkPi device.",
-                configPath);
+            var defaultSettings = new AppSettings
+            {
+                RefreshIntervalSeconds = 5,
+                Devices =
+                [
+                    new DeviceSettings
+                    {
+                        Name = "LinkPi",
+                        BaseUrl = "http://192.168.1.100",
+                        Username = "admin",
+                        Password = string.Empty
+                    }
+                ]
+            };
+            var json = JsonSerializer.Serialize(defaultSettings, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(configPath, json, cancellationToken);
+            return defaultSettings;
         }
 
         await using var stream = File.OpenRead(configPath);

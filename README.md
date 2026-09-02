@@ -16,7 +16,7 @@ The device API has no passive JPEG snapshot method. Preview cards therefore use 
 
 ## Configuration
 
-Copy `Linkpi Monitor/config.example.json` to `Linkpi Monitor/config.json`. The real file is excluded from Git because it contains credentials.
+On first launch, the application creates `config.json` beside the executable when the file does not already exist. Edit the generated starter device and add further entries as needed. The real file is excluded from Git because it can contain credentials.
 
 ```json
 {
@@ -41,3 +41,20 @@ dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 ```
 
 The Watch button opens the preferred advertised RTSP stream. A player such as VLC must be installed and registered for the `rtsp` protocol.
+
+## Create a release package
+
+From the repository root:
+
+```powershell
+.\Publish.ps1
+```
+
+The script restores the solution, runs the Release checks, publishes a framework-dependent Windows x64 single-file executable, audits the exact package contents, and creates:
+
+```text
+artifacts/LinkpiMonitor/
+artifacts/LinkpiMonitor-win-x64.zip
+```
+
+The release never contains the credential-bearing `config.json`; the application creates it on first launch. Run the package from a folder where your account can create and update files. An interactive script waits for Enter before closing; automated callers can use `.\Publish.ps1 -NoPause`.
