@@ -26,9 +26,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private readonly DispatcherTimer _refreshTimer = new();
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private AppSettings? _settings;
     private LinkPiClient? _client;
     private CancellationTokenSource? _refreshCancellation;
     private bool _isLoaded;
+    private bool _suppressDeviceSelection;
     private string _connectionStatus = "Not connected";
     private Brush _connectionBrush = OfflineBrush;
     private string _cpuDisplay = "—";
@@ -99,15 +101,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            var settings = await AppSettings.LoadAsync();
-            foreach (var device in settings.Devices)
+            _settings = await AppSettings.LoadAsync();
+            foreach (var device in _settings.Devices)
             {
                 Devices.Add(device);
             }
 
-            _refreshTimer.Interval = TimeSpan.FromSeconds(settings.RefreshIntervalSeconds);
+            _refreshTimer.Interval = TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds);
             _isLoaded = true;
-            DevicePicker.SelectedIndex = 0;
+            if (Devices.Count > 0)
+            {
+                _suppressDeviceSelection = true;
+                DevicePicker.SelectedIndex = 0;
+                _suppressDeviceSelection = false;
+                UpdateDeviceActionState();
+                await ActivateDeviceAsync(Devices[0]);
+            }
+            else
+            {
+                ShowNoDeviceState();
+            }
+
             _refreshTimer.Start();
         }
         catch (Exception exception)
@@ -118,11 +132,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void DevicePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_isLoaded || DevicePicker.SelectedItem is not DeviceSettings device)
+        UpdateDeviceActionState();
+        if (!_isLoaded || _suppressDeviceSelection)
         {
             return;
         }
 
+        if (DevicePicker.SelectedItem is not DeviceSettings device)
+        {
+            ShowNoDeviceState();
+            return;
+        }
+
+        await ActivateDeviceAsync(device);
+    }
+
+    private async Task ActivateDeviceAsync(DeviceSettings device)
+    {
         _refreshCancellation?.Cancel();
         _client?.Dispose();
         _client = new LinkPiClient(device);
@@ -132,6 +158,173 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ConnectionBrush = BusyBrush;
         ErrorMessage = string.Empty;
         await RefreshAsync();
+    }
+
+    private async void AddDeviceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var editor = new DeviceEditorWindow { Owner = this };
+        if (editor.ShowDialog() != true || editor.Device is not { } device)
+        {
+            return;
+        }
+
+        if (ContainsBaseUrl(device.BaseUrl))
+        {
+            ShowDuplicateDeviceMessage(device.BaseUrl);
+            return;
+        }
+
+        var updatedDevices = Devices.Append(device).ToArray();
+        if (await SaveDevicesAsync(updatedDevices))
+        {
+            await ApplyDeviceListAsync(updatedDevices, updatedDevices.Length - 1);
+        }
+    }
+
+    private async void EditDeviceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedIndex = DevicePicker.SelectedIndex;
+        if (selectedIndex < 0 || DevicePicker.SelectedItem is not DeviceSettings selectedDevice)
+        {
+            return;
+        }
+
+        var editor = new DeviceEditorWindow(selectedDevice) { Owner = this };
+        if (editor.ShowDialog() != true || editor.Device is not { } device)
+        {
+            return;
+        }
+
+        if (ContainsBaseUrl(device.BaseUrl, selectedIndex))
+        {
+            ShowDuplicateDeviceMessage(device.BaseUrl);
+            return;
+        }
+
+        var updatedDevices = Devices.ToArray();
+        updatedDevices[selectedIndex] = device;
+        if (await SaveDevicesAsync(updatedDevices))
+        {
+            await ApplyDeviceListAsync(updatedDevices, selectedIndex);
+        }
+    }
+
+    private async void DeleteDeviceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedIndex = DevicePicker.SelectedIndex;
+        if (selectedIndex < 0 || DevicePicker.SelectedItem is not DeviceSettings selectedDevice)
+        {
+            return;
+        }
+
+        var answer = MessageBox.Show(
+            this,
+            $"Remove '{selectedDevice.Name}' from LinkPi Monitor?\n\nThis only changes the local config.json file.",
+            "Delete device",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var updatedDevices = Devices.Where((_, index) => index != selectedIndex).ToArray();
+        if (await SaveDevicesAsync(updatedDevices))
+        {
+            var nextIndex = updatedDevices.Length == 0 ? -1 : Math.Min(selectedIndex, updatedDevices.Length - 1);
+            await ApplyDeviceListAsync(updatedDevices, nextIndex);
+        }
+    }
+
+    private bool ContainsBaseUrl(string baseUrl, int ignoredIndex = -1) =>
+        Devices.Where((_, index) => index != ignoredIndex)
+            .Any(device => device.BaseUrl.Equals(baseUrl, StringComparison.OrdinalIgnoreCase));
+
+    private void ShowDuplicateDeviceMessage(string baseUrl) =>
+        MessageBox.Show(
+            this,
+            $"A device with the base URL '{baseUrl}' already exists.",
+            "Duplicate device",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+
+    private async Task<bool> SaveDevicesAsync(IReadOnlyList<DeviceSettings> devices)
+    {
+        if (_settings is null)
+        {
+            MessageBox.Show(
+                this,
+                "The local device configuration has not finished loading.",
+                "Configuration unavailable",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return false;
+        }
+
+        var updatedSettings = new AppSettings
+        {
+            Devices = [.. devices],
+            RefreshIntervalSeconds = _settings.RefreshIntervalSeconds
+        };
+
+        try
+        {
+            await updatedSettings.SaveAsync();
+            _settings = updatedSettings;
+            return true;
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                $"Could not save the local device configuration.\n\n{exception.Message}",
+                "Save failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            return false;
+        }
+    }
+
+    private async Task ApplyDeviceListAsync(IReadOnlyList<DeviceSettings> devices, int selectedIndex)
+    {
+        _suppressDeviceSelection = true;
+        Replace(Devices, devices);
+        DevicePicker.SelectedIndex = selectedIndex;
+        _suppressDeviceSelection = false;
+        UpdateDeviceActionState();
+
+        if (selectedIndex >= 0)
+        {
+            await ActivateDeviceAsync(Devices[selectedIndex]);
+        }
+        else
+        {
+            ShowNoDeviceState();
+        }
+    }
+
+    private void UpdateDeviceActionState()
+    {
+        var hasSelection = DevicePicker.SelectedItem is DeviceSettings;
+        EditDeviceButton.IsEnabled = hasSelection;
+        DeleteDeviceButton.IsEnabled = hasSelection;
+    }
+
+    private void ShowNoDeviceState()
+    {
+        _refreshCancellation?.Cancel();
+        _client?.Dispose();
+        _client = null;
+        Channels.Clear();
+        PushDestinations.Clear();
+        CpuDisplay = "—";
+        MemoryDisplay = "—";
+        TemperatureDisplay = "—";
+        ConnectionStatus = "No device";
+        ConnectionBrush = OfflineBrush;
+        ErrorMessage = string.Empty;
+        UpdateDeviceActionState();
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshAsync();

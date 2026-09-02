@@ -5,13 +5,16 @@ namespace Linkpi_Monitor;
 
 public sealed class AppSettings
 {
+    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+
     public List<DeviceSettings> Devices { get; init; } = [];
     public int RefreshIntervalSeconds { get; init; } = 5;
 
+    public static string ConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
+
     public static async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
-        var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
-        if (!File.Exists(configPath))
+        if (!File.Exists(ConfigPath))
         {
             var defaultSettings = new AppSettings
             {
@@ -27,12 +30,11 @@ public sealed class AppSettings
                     }
                 ]
             };
-            var json = JsonSerializer.Serialize(defaultSettings, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(configPath, json, cancellationToken);
+            await defaultSettings.SaveAsync(cancellationToken);
             return defaultSettings;
         }
 
-        await using var stream = File.OpenRead(configPath);
+        await using var stream = File.OpenRead(ConfigPath);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var root = document.RootElement;
         var refreshSeconds = root.TryGetProperty("RefreshIntervalSeconds", out var refreshElement)
@@ -53,12 +55,25 @@ public sealed class AppSettings
         }
 
         devices.RemoveAll(device => string.IsNullOrWhiteSpace(device.BaseUrl));
-        if (devices.Count == 0)
-        {
-            throw new InvalidDataException("config.json does not contain a LinkPi device with a BaseUrl.");
-        }
-
         return new AppSettings { Devices = devices, RefreshIntervalSeconds = refreshSeconds };
+    }
+
+    public async Task SaveAsync(CancellationToken cancellationToken = default)
+    {
+        var temporaryPath = $"{ConfigPath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            var json = JsonSerializer.Serialize(this, SerializerOptions);
+            await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
+            File.Move(temporaryPath, ConfigPath, true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 
     private static DeviceSettings ReadDevice(JsonElement element)
@@ -91,7 +106,7 @@ public sealed class AppSettings
             : string.Empty;
 }
 
-public sealed class DeviceSettings
+public sealed record DeviceSettings
 {
     public required string Name { get; init; }
     public required string BaseUrl { get; init; }

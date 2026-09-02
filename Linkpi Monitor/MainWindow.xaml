@@ -40,8 +40,12 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
                     </StackPanel>
-                    <Button Content="Add device" IsEnabled="False" Margin="0,18,8,0"
-                            ToolTip="Device editing is planned but not implemented yet." />
+                    <Button Content="Add device" Margin="0,18,8,0" Click="AddDeviceButton_Click"
+                            ToolTip="Add a LinkPi to this monitor." />
+                    <Button x:Name="EditDeviceButton" Content="Edit" IsEnabled="False" Margin="0,18,8,0"
+                            Click="EditDeviceButton_Click" ToolTip="Edit the selected device connection." />
+                    <Button x:Name="DeleteDeviceButton" Content="Delete" IsEnabled="False" Margin="0,18,8,0"
+                            Click="DeleteDeviceButton_Click" ToolTip="Remove the selected device from this monitor." />
                     <Button Content="Refresh" Style="{StaticResource PrimaryButton}" Margin="0,18,0,0"
                             Click="RefreshButton_Click" />
                 </StackPanel>

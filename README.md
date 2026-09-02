@@ -7,7 +7,7 @@ A read-only Windows monitor for LinkPi encoder devices, built with C# and .NET 1
 - Select one of multiple configured LinkPi devices.
 - Poll CPU, memory, temperature, channel configuration, physical-input state and push state.
 - Present decode, encode and stream output details together for every channel.
-- Keep HDMI, USB camera, file, color-key and Mix channels visible alongside network decoders.
+- Keep HDMI, USB camera and Mix channels visible alongside network decoders while hiding internal file and color-key channels.
 - Show a current dashboard snapshot for every enabled, decodable channel.
 - Watch an advertised RTSP stream directly inside LinkPi Monitor.
 - Show publishing status and bitrate without exposing stream keys.
@@ -19,7 +19,7 @@ Preview cards use the same `enc.snap` plus `snap/snap{id}.jpg` cycle as the devi
 
 ## Configuration
 
-On first launch, the application creates `config.json` beside the executable when the file does not already exist. Edit the generated starter device and add further entries as needed. The real file is excluded from Git because it can contain credentials.
+On first launch, the application creates `config.json` beside the executable when the file does not already exist. Use the Add device, Edit and Delete buttons in the header to manage connections. Changes are saved locally to this file; an empty device list is supported. The real file is excluded from Git because it can contain credentials.
 
 ```json
 {
