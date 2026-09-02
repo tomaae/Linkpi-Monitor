@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using LibVLCSharp.Shared;
 using VlcMediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
@@ -190,7 +192,7 @@ public partial class WatchWindow : Window
         });
     }
 
-    private void Window_Closed(object? sender, EventArgs e)
+    private void Window_Closing(object? sender, CancelEventArgs e)
     {
         _isClosing = true;
         VideoView.MediaPlayer = null;
@@ -198,6 +200,24 @@ public partial class WatchWindow : Window
         _media?.Dispose();
         _mediaPlayer.Dispose();
         _libVlc.Dispose();
+    }
+
+    private void Window_Closed(object? sender, EventArgs e)
+    {
+        var owner = Owner;
+        if (owner is null || !owner.IsVisible)
+        {
+            return;
+        }
+
+        owner.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        {
+            if (owner.IsVisible)
+            {
+                owner.Activate();
+                owner.Focus();
+            }
+        });
     }
 
     private static Brush CreateBrush(string color)
