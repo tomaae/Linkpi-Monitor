@@ -140,7 +140,27 @@
         </Border>
 
         <TabControl Grid.Row="2">
+            <TabControl.Style>
+                <Style TargetType="TabControl" BasedOn="{StaticResource {x:Type TabControl}}">
+                    <Setter Property="SelectedIndex" Value="0" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Configuration.Decode.IsNetworkSource}" Value="False">
+                            <Setter Property="SelectedIndex" Value="1" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TabControl.Style>
             <TabItem Header="Decode">
+                <TabItem.Style>
+                    <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Configuration.Decode.IsNetworkSource}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TabItem.Style>
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="6,4,6,20">
                     <Border Style="{StaticResource ConfigCard}" IsEnabled="{Binding Configuration.Decode.IsNetworkSource}"><StackPanel>
                         <TextBlock Text="Network input" FontSize="18" FontWeight="SemiBold" /><TextBlock Text="Only applies to Network decoder channels." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,14" />
