@@ -148,11 +148,11 @@
                                                     <TextBlock Text="{Binding OutputsSummary}" Foreground="{StaticResource AccentBrush}" Margin="0,8,0,0" FontSize="11" />
                                                     <Grid Margin="0,14,0,0">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" />
-                                                            <ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                                         <Button Grid.Column="0" Content="Watch" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanWatch}"
                                                                 Tag="{Binding}" Click="WatchButton_Click" ToolTip="Open the live stream inside LinkPi Monitor." />
-                                                        <Button Grid.Column="2" Content="Configuration" Tag="{Binding}" Click="ConfigurationButton_Click" />
-                                                        <Button Grid.Column="4" Content="Edit" IsEnabled="False" ToolTip="Configuration editing is not implemented yet." />
+                                                        <Button Grid.Column="2" Content="Edit" Tag="{Binding}" Click="ConfigurationButton_Click"
+                                                                ToolTip="Open the configuration preview. Saving remains disabled." />
                                                     </Grid>
                                                 </StackPanel>
                                             </StackPanel>
