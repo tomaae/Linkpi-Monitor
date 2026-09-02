@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/node_modules/
+artifacts/
+.vs/
+TestResults/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.agents/
+.codex/
+.sentry-native/
+.diagnostics/
+*.log
+config.json
