@@ -1,8 +1,10 @@
 using System.Globalization;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace Linkpi_Monitor;
 
@@ -35,10 +37,12 @@ public sealed class LinkPiClient : IDisposable
         var epgTask = InvokeRpcAsync("RPC", "enc.getEPG", cancellationToken);
         var pushStateTask = InvokeRpcAsync("RPC", "push.getState", cancellationToken);
 
-        await Task.WhenAll(configTask, pushConfigTask, systemTask, inputTask, epgTask, pushStateTask);
+        await Task.WhenAll(configTask, pushConfigTask, systemTask, inputTask, epgTask, pushStateTask)
+            .ConfigureAwait(false);
 
         var system = await systemTask;
         var channels = ParseChannels(await configTask, await inputTask, await epgTask);
+        await LoadPreviewImagesAsync(channels, cancellationToken).ConfigureAwait(false);
         var pushState = await pushStateTask;
 
         return new LinkPiSnapshot
@@ -117,6 +121,7 @@ public sealed class LinkPiClient : IDisposable
             var encoder = GetObject(channel, "encv");
             var audio = GetObject(channel, "enca");
             var stream = GetObject(channel, "stream");
+            var canPreview = CanPreview(channel);
             epgById.TryGetValue(id, out var epgEntry);
 
             channels.Add(new ChannelDisplay
@@ -130,15 +135,120 @@ public sealed class LinkPiClient : IDisposable
                 VideoSummary = GetVideoSummary(encoder),
                 AudioSummary = GetAudioSummary(audio),
                 OutputsSummary = GetOutputsSummary(stream),
-                PreviewMessage = enabled
-                    ? "Snapshot unavailable through read-only API"
-                    : "Stream is disabled",
+                PreviewMessage = !enabled
+                    ? "Stream is disabled"
+                    : canPreview ? "Loading snapshot…" : "Preview unavailable",
                 WatchUri = enabled ? GetWatchUri(epgEntry) : null,
-                IsEnabled = enabled
+                IsEnabled = enabled,
+                CanPreview = canPreview
             });
         }
 
         return channels;
+    }
+
+    private async Task LoadPreviewImagesAsync(
+        IReadOnlyList<ChannelDisplay> channels,
+        CancellationToken cancellationToken)
+    {
+        var previewChannels = channels.Where(channel => channel.CanPreview).ToArray();
+        if (previewChannels.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            // This is the same passive preview cycle used by the LinkPi dashboard.
+            await InvokeRpcAsync("RPC", "enc.snap", cancellationToken).ConfigureAwait(false);
+            await Task.Delay(120, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            foreach (var channel in previewChannels)
+            {
+                channel.PreviewMessage = "Snapshot unavailable";
+            }
+
+            return;
+        }
+
+        await Task.WhenAll(previewChannels.Select(channel => LoadPreviewImageAsync(channel, cancellationToken)))
+            .ConfigureAwait(false);
+    }
+
+    private async Task LoadPreviewImageAsync(ChannelDisplay channel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var cacheKey = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            using var response = await _httpClient.GetAsync(
+                $"snap/snap{channel.Id}.jpg?rnd={cacheKey}",
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            var mediaType = response.Content.Headers.ContentType?.MediaType;
+            if (mediaType is null || !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("The preview response is not an image.");
+            }
+
+            if (response.Content.Headers.ContentLength is > 10 * 1024 * 1024)
+            {
+                throw new InvalidDataException("The preview image is too large.");
+            }
+
+            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken)
+                .ConfigureAwait(false);
+            using var imageStream = new MemoryStream();
+            await responseStream.CopyToAsync(imageStream, cancellationToken).ConfigureAwait(false);
+            if (imageStream.Length is <= 0 or > 10 * 1024 * 1024)
+            {
+                throw new InvalidDataException("The preview image has an invalid size.");
+            }
+
+            imageStream.Position = 0;
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.DecodePixelWidth = 730;
+            image.StreamSource = imageStream;
+            image.EndInit();
+            image.Freeze();
+
+            channel.PreviewImage = image;
+            channel.PreviewMessage = string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            channel.PreviewMessage = "Snapshot unavailable";
+        }
+    }
+
+    private static bool CanPreview(JsonElement channel)
+    {
+        if (!GetBool(channel, "enable"))
+        {
+            return false;
+        }
+
+        var type = GetString(channel, "type");
+        if (type.Equals("ndi", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !type.Equals("net", StringComparison.OrdinalIgnoreCase) ||
+            GetBool(GetObject(channel, "net"), "decodeV");
     }
 
     private IReadOnlyList<PushDisplay> ParsePushDestinations(

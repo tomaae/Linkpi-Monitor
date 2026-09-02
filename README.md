@@ -8,11 +8,12 @@ A read-only Windows monitor for LinkPi encoder devices, built with C# and .NET 1
 - Poll CPU, memory, temperature, channel configuration, physical-input state and push state.
 - Present decode, encode and stream output details together for every channel.
 - Keep HDMI, USB camera, file, color-key and Mix channels visible alongside network decoders.
+- Show a current dashboard snapshot for every enabled, decodable channel.
 - Watch an advertised RTSP stream directly inside LinkPi Monitor.
 - Show publishing status and bitrate without exposing stream keys.
 - Display planned editing controls in a disabled state.
 
-The device API has no passive JPEG snapshot method. Preview cards therefore use a placeholder until local stream-frame decoding is added. The app never invokes `enc.snap`, `push.getPreview`, or any update/start/stop method.
+Preview cards use the same `enc.snap` plus `snap/snap{id}.jpg` cycle as the device dashboard, but only once per configured monitor refresh rather than twice per second. Snapshot failures are isolated per channel. The app never invokes an update/start/stop method.
 
 ## Configuration
 

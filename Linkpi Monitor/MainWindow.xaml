@@ -114,8 +114,19 @@
                                                 <Border Height="170" Background="#090D12" CornerRadius="9,9,0,0">
                                                     <Grid>
                                                         <TextBlock Text="{Binding Initial}" Foreground="#24303C" FontSize="68" FontWeight="Bold"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        <Image Source="{Binding PreviewImage}" Stretch="Uniform" />
                                                         <Border VerticalAlignment="Bottom" Background="#CC11171E" Padding="12,9">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasPreview}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
                                                             <TextBlock Text="{Binding PreviewMessage}" Foreground="{StaticResource MutedTextBrush}"
                                                                        FontSize="11" HorizontalAlignment="Center" />
                                                         </Border>
@@ -142,7 +153,7 @@
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" />
                                                             <ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                                         <Button Grid.Column="0" Content="Watch" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanWatch}"
-                                                                Tag="{Binding}" Click="WatchButton_Click" ToolTip="Open the stream in its registered player." />
+                                                                Tag="{Binding}" Click="WatchButton_Click" ToolTip="Open the live stream inside LinkPi Monitor." />
                                                         <Button Grid.Column="2" Content="Configuration" Tag="{Binding}" Click="ConfigurationButton_Click" />
                                                         <Button Grid.Column="4" Content="Edit" IsEnabled="False" ToolTip="Configuration editing is not implemented yet." />
                                                     </Grid>

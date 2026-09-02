@@ -23,10 +23,13 @@ public sealed class ChannelDisplay
     public required string VideoSummary { get; init; }
     public required string AudioSummary { get; init; }
     public required string OutputsSummary { get; init; }
-    public required string PreviewMessage { get; init; }
+    public required string PreviewMessage { get; set; }
+    public ImageSource? PreviewImage { get; set; }
+    public bool HasPreview => PreviewImage is not null;
     public Uri? WatchUri { get; init; }
     public bool CanWatch => WatchUri is not null;
     public bool IsEnabled { get; init; }
+    public bool CanPreview { get; init; }
 }
 
 public sealed class PushDisplay
