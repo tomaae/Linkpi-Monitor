@@ -129,6 +129,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _client = new LinkPiClient(device);
         Channels.Clear();
         PushDestinations.Clear();
+        ConnectionStatus = "Connecting";
+        ConnectionBrush = BusyBrush;
+        ErrorMessage = string.Empty;
         await RefreshAsync();
     }
 
@@ -149,8 +152,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            ConnectionStatus = "Refreshing";
-            ConnectionBrush = BusyBrush;
             var snapshot = await _client.GetSnapshotAsync(_refreshCancellation.Token);
 
             Replace(Channels, snapshot.Channels);
