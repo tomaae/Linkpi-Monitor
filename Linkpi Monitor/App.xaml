@@ -11,8 +11,10 @@
         <SolidColorBrush x:Key="MutedTextBrush" Color="#9AA6B2" />
         <SolidColorBrush x:Key="AccentBrush" Color="#F5B82E" />
 
-        <Style TargetType="TextBlock">
+        <Style TargetType="Window">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe UI" />
         </Style>
         <Style x:Key="CardStyle" TargetType="Border">
@@ -69,6 +71,24 @@
             <Setter Property="BorderBrush" Value="#4A5665" />
             <Setter Property="Padding" Value="10,7" />
             <Setter Property="MinHeight" Value="36" />
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#11161C" />
+            <Setter Property="Background" Value="White" />
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Foreground" Value="#11161C" />
+                    <Setter Property="Background" Value="#D9EAF7" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="#11161C" />
+                    <Setter Property="Background" Value="#B9DDF2" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#11161C" />
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style TargetType="TabControl">
