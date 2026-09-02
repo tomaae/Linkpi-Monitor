@@ -10,12 +10,15 @@ public partial class WatchWindow : Window
     private static readonly Brush OnlineBrush = CreateBrush("#39D98A");
     private static readonly Brush WarningBrush = CreateBrush("#F5B82E");
     private static readonly Brush OfflineBrush = CreateBrush("#FF5C5C");
+    private static readonly Brush AccentBrush = CreateBrush("#F5B82E");
+    private static readonly Brush AccentTextBrush = CreateBrush("#1C1608");
 
     private readonly Uri _streamUri;
     private readonly LibVLC _libVlc;
     private readonly VlcMediaPlayer _mediaPlayer;
     private Media? _media;
     private bool _isClosing;
+    private bool _isMuted;
 
     public WatchWindow(ChannelDisplay channel)
     {
@@ -54,6 +57,27 @@ public partial class WatchWindow : Window
         _media.AddOption(":rtsp-tcp");
         _media.AddOption(":network-caching=300");
         _mediaPlayer.Play(_media);
+    }
+
+    private void MuteButton_Click(object sender, RoutedEventArgs e)
+    {
+        _isMuted = !_isMuted;
+        _mediaPlayer.Mute = _isMuted;
+        MuteButton.Content = _isMuted ? "Unmute" : "Mute";
+        MuteButton.ToolTip = _isMuted ? "Restore audio for this live view" : "Mute this live view";
+
+        if (_isMuted)
+        {
+            MuteButton.Background = AccentBrush;
+            MuteButton.BorderBrush = AccentBrush;
+            MuteButton.Foreground = AccentTextBrush;
+        }
+        else
+        {
+            MuteButton.ClearValue(BackgroundProperty);
+            MuteButton.ClearValue(BorderBrushProperty);
+            MuteButton.ClearValue(ForegroundProperty);
+        }
     }
 
     private void SetPlaybackStatus(string text, Brush brush)
