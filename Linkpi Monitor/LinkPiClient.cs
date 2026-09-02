@@ -112,11 +112,13 @@ public sealed class LinkPiClient : IDisposable
         JsonElement epg,
         JsonElement hardware)
     {
-        var inputAvailability = inputState.ValueKind == JsonValueKind.Array
+        var inputStates = inputState.ValueKind == JsonValueKind.Array
             ? inputState.EnumerateArray().ToDictionary(
-                item => GetInt(item, "chnId", -1),
-                item => GetBool(item, "avalible"))
+                item => GetInt(item, "chnId", -1))
             : [];
+        var inputAvailability = inputStates.ToDictionary(
+            item => item.Key,
+            item => GetBool(item.Value, "avalible"));
 
         var epgById = epg.ValueKind == JsonValueKind.Array
             ? epg.EnumerateArray().ToDictionary(item => GetInt(item, "id", -1))
@@ -145,6 +147,7 @@ public sealed class LinkPiClient : IDisposable
             var stream = GetObject(channel, "stream");
             var canPreview = CanPreview(channel);
             epgById.TryGetValue(id, out var epgEntry);
+            inputStates.TryGetValue(id, out var sourceState);
 
             channels.Add(new ChannelDisplay
             {
@@ -163,6 +166,8 @@ public sealed class LinkPiClient : IDisposable
                 WatchUri = enabled ? GetWatchUri(epgEntry) : null,
                 IsEnabled = enabled,
                 CanPreview = canPreview,
+                SourceWidth = GetInt(sourceState, "width"),
+                SourceHeight = GetInt(sourceState, "height"),
                 Configuration = ParseChannelConfiguration(channel, audioSources, supports4K, supportsBFrames)
             });
         }
