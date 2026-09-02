@@ -22,6 +22,7 @@ public partial class WatchWindow : Window
     private readonly LibVLC _libVlc;
     private readonly VlcMediaPlayer _mediaPlayer;
     private readonly bool _hasConfiguredAspectRatio;
+    private readonly string? _vlcAspectRatio;
     private Media? _media;
     private bool _isClosing;
     private bool _isMuted;
@@ -36,7 +37,7 @@ public partial class WatchWindow : Window
         }
 
         _streamUri = channel.WatchUri;
-        (_videoAspectRatio, _hasConfiguredAspectRatio) = GetInitialAspectRatio(channel);
+        (_videoAspectRatio, _hasConfiguredAspectRatio, _vlcAspectRatio) = GetInitialAspectRatio(channel);
         SizeWindowForAspectRatio();
         Title = $"{channel.Name} — LinkPi Monitor";
         ChannelNameText.Text = channel.Name;
@@ -50,7 +51,11 @@ public partial class WatchWindow : Window
         _mediaPlayer.Opening += (_, _) => SetPlaybackStatus("Opening stream", WarningBrush);
         _mediaPlayer.Buffering += (_, args) => SetPlaybackStatus($"Buffering {args.Cache:0}%", WarningBrush);
         _mediaPlayer.Playing += (_, _) => SetPlaybackStatus("Playing", OnlineBrush);
-        _mediaPlayer.Vout += (_, _) => RefreshAspectRatioFromPlayer();
+        _mediaPlayer.Vout += (_, _) =>
+        {
+            ApplyConfiguredAspectRatio();
+            RefreshAspectRatioFromPlayer();
+        };
         _mediaPlayer.Paused += (_, _) => SetPlaybackStatus("Paused", WarningBrush);
         _mediaPlayer.Stopped += (_, _) => SetPlaybackStatus("Stopped", WarningBrush);
         _mediaPlayer.EncounteredError += (_, _) => SetPlaybackStatus("Playback failed", OfflineBrush);
@@ -71,6 +76,7 @@ public partial class WatchWindow : Window
         _media.AddOption(":rtsp-tcp");
         _media.AddOption(":network-caching=300");
         _mediaPlayer.Play(_media);
+        ApplyConfiguredAspectRatio();
     }
 
     private void MuteButton_Click(object sender, RoutedEventArgs e)
@@ -95,6 +101,14 @@ public partial class WatchWindow : Window
     }
 
     private void VideoHost_SizeChanged(object sender, SizeChangedEventArgs e) => ResizeVideoToAspectRatio();
+
+    private void ApplyConfiguredAspectRatio()
+    {
+        if (!_isClosing && _vlcAspectRatio is not null)
+        {
+            _mediaPlayer.AspectRatio = _vlcAspectRatio;
+        }
+    }
 
     private void SizeWindowForAspectRatio()
     {
@@ -156,36 +170,64 @@ public partial class WatchWindow : Window
         });
     }
 
-    private static (double AspectRatio, bool IsConfigured) GetInitialAspectRatio(ChannelDisplay channel)
+    private static (double AspectRatio, bool IsConfigured, string? VlcAspectRatio) GetInitialAspectRatio(
+        ChannelDisplay channel)
     {
-        if (channel.SourceWidth > 0 && channel.SourceHeight > 0)
+        var width = channel.SourceWidth;
+        var height = channel.SourceHeight;
+        if ((width <= 0 || height <= 0) &&
+            TryParseVideoSize(channel.Configuration.MainEncoder.VideoSize, out var encodedWidth, out var encodedHeight))
+        {
+            width = encodedWidth;
+            height = encodedHeight;
+        }
+
+        if ((width <= 0 || height <= 0) &&
+            channel.PreviewImage is BitmapSource { PixelWidth: > 0, PixelHeight: > 0 } preview)
+        {
+            width = preview.PixelWidth;
+            height = preview.PixelHeight;
+        }
+
+        if (width > 0 && height > 0)
         {
             var decode = channel.Configuration.Decode;
-            var croppedWidth = channel.SourceWidth - ParseCrop(decode.CropLeft) - ParseCrop(decode.CropRight);
-            var croppedHeight = channel.SourceHeight - ParseCrop(decode.CropTop) - ParseCrop(decode.CropBottom);
-            var width = croppedWidth > 0 ? croppedWidth : channel.SourceWidth;
-            var height = croppedHeight > 0 ? croppedHeight : channel.SourceHeight;
-            var rotation = ParseRotation(decode.Rotate);
-            return rotation is 90 or 270
-                ? ((double)height / width, true)
-                : ((double)width / height, true);
+            var croppedWidth = width - ParseCrop(decode.CropLeft) - ParseCrop(decode.CropRight);
+            var croppedHeight = height - ParseCrop(decode.CropTop) - ParseCrop(decode.CropBottom);
+            width = croppedWidth > 0 ? croppedWidth : width;
+            height = croppedHeight > 0 ? croppedHeight : height;
+
+            if (ParseRotation(decode.Rotate) is 90 or 270)
+            {
+                (width, height) = (height, width);
+            }
+
+            var divisor = GreatestCommonDivisor(width, height);
+            return ((double)width / height, true, $"{width / divisor}:{height / divisor}");
         }
 
-        if (channel.PreviewImage is BitmapSource { PixelWidth: > 0, PixelHeight: > 0 } preview)
+        return (FallbackAspectRatio, false, null);
+    }
+
+    private static bool TryParseVideoSize(string value, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        var separator = value.IndexOf('x', StringComparison.OrdinalIgnoreCase);
+        return separator > 0 &&
+               int.TryParse(value[..separator], out width) &&
+               int.TryParse(value[(separator + 1)..], out height) &&
+               width > 0 && height > 0;
+    }
+
+    private static int GreatestCommonDivisor(int left, int right)
+    {
+        while (right != 0)
         {
-            return ((double)preview.PixelWidth / preview.PixelHeight, true);
+            (left, right) = (right, left % right);
         }
 
-        var separator = channel.Configuration.MainEncoder.VideoSize.IndexOf('x', StringComparison.OrdinalIgnoreCase);
-        if (separator > 0 &&
-            int.TryParse(channel.Configuration.MainEncoder.VideoSize[..separator], out var encodedWidth) &&
-            int.TryParse(channel.Configuration.MainEncoder.VideoSize[(separator + 1)..], out var encodedHeight) &&
-            encodedWidth > 0 && encodedHeight > 0)
-        {
-            return ((double)encodedWidth / encodedHeight, true);
-        }
-
-        return (FallbackAspectRatio, false);
+        return Math.Max(1, left);
     }
 
     private static int ParseCrop(string value) =>
