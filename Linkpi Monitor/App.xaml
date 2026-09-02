@@ -71,6 +71,13 @@
             <Setter Property="BorderBrush" Value="#4A5665" />
             <Setter Property="Padding" Value="10,7" />
             <Setter Property="MinHeight" Value="36" />
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#5D6670" />
+                    <Setter Property="Background" Value="#E6E8EB" />
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="#11161C" />
@@ -85,7 +92,8 @@
                     <Setter Property="Background" Value="#B9DDF2" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Foreground" Value="#11161C" />
+                    <Setter Property="Foreground" Value="#5D6670" />
+                    <Setter Property="Background" Value="#E6E8EB" />
                     <Setter Property="Opacity" Value="1" />
                 </Trigger>
             </Style.Triggers>
