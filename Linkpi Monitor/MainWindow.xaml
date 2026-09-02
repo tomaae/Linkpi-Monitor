@@ -153,7 +153,7 @@
                                                             <ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                                                         <Button Grid.Column="0" Content="Watch" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanWatch}"
                                                                 Tag="{Binding}" Click="WatchButton_Click" ToolTip="Open the live stream inside LinkPi Monitor." />
-                                                        <Button Grid.Column="2" Content="Edit" Tag="{Binding}" Click="ConfigurationButton_Click"
+                                                        <Button Grid.Column="2" Content="Configuration" Tag="{Binding}" Click="ConfigurationButton_Click"
                                                                 ToolTip="Open the configuration preview. Saving remains disabled." />
                                                     </Grid>
                                                 </StackPanel>
