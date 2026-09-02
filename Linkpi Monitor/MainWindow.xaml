@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Linkpi_Monitor"
         mc:Ignorable="d"
-        Title="LinkPi Monitor" Height="820" Width="1280" MinWidth="980" MinHeight="640"
+        Title="LinkPi Monitor" Icon="App.ico" Height="820" Width="1280" MinWidth="980" MinHeight="640"
         Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded" Closed="Window_Closed">
     <Grid>
