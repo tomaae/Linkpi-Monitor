@@ -22,10 +22,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="40" Height="40" CornerRadius="9" Background="{StaticResource AccentBrush}">
-                        <TextBlock Text="LP" Foreground="#17130B" FontSize="17" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <Image Source="App.ico" Width="40" Height="40" />
                     <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="LinkPi Monitor" FontSize="19" FontWeight="SemiBold" />
                         <TextBlock Text="Read-only device overview" Foreground="{StaticResource MutedTextBrush}" FontSize="12" />
