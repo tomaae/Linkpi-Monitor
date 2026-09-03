@@ -128,18 +128,14 @@
 
     <Grid Margin="24">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <StackPanel><TextBlock Text="{Binding Name}" FontSize="25" FontWeight="SemiBold" /><TextBlock Text="{Binding SourceType}" Foreground="{StaticResource MutedTextBrush}" Margin="0,4,0,0" /></StackPanel>
             <Border Grid.Column="1" Background="#27313D" CornerRadius="12" Padding="10,5" VerticalAlignment="Center"><StackPanel Orientation="Horizontal"><Ellipse Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Center" /><TextBlock Text="{Binding Status}" Margin="7,0,0,0" FontWeight="SemiBold" /></StackPanel></Border>
         </Grid>
-        <Border Grid.Row="1" Background="#241F12" BorderBrush="#5B4818" BorderThickness="1" CornerRadius="7" Padding="12" Margin="0,18,0,14">
-            <TextBlock Text="Preview mode: controls are interactive, but changes remain only in this window. Save is disabled and no update RPC is sent to the device." Foreground="#FFD978" TextWrapping="Wrap" />
-        </Border>
-
-        <TabControl Grid.Row="2">
+        <TabControl Grid.Row="1" Margin="0,18,0,0">
             <TabItem Header="General">
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="6,4,6,20">
                     <Border Style="{StaticResource ConfigCard}"><StackPanel>
@@ -304,7 +300,7 @@
             </TabItem>
         </TabControl>
 
-        <Grid Grid.Row="3" Margin="0,18,0,0">
+        <Grid Grid.Row="2" Margin="0,18,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <Button x:Name="SaveButton" Grid.Column="1" Content="Save changes" Click="SaveButton_Click" />
             <Button Grid.Column="3" Content="Close" Style="{StaticResource PrimaryButton}" Click="CloseButton_Click" />
