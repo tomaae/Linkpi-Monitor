@@ -7,21 +7,19 @@ on:
 
 permissions:
   issues: write
-  pull-requests: write
 
 concurrency:
-  group: lock
+  group: lock-${{ github.repository }}
 
 jobs:
   lock:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: dessant/lock-threads@v6
         with:
           github-token: ${{ github.token }}
-          exclude-any-issue-labels: 'planned, help-wanted'
-          exclude-any-pr-labels: 'wip'
+          exclude-any-issue-labels: 'planned,help wanted'
           issue-inactive-days: "30"
           issue-lock-reason: ""
-          pr-inactive-days: "7"
-          pr-lock-reason: ""
+          process-only: issues

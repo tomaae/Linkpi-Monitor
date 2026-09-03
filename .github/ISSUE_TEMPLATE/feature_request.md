@@ -1,31 +1,23 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: "[Feature]"
+about: Suggest an improvement to LinkPi Monitor
+title: "[Feature] "
 labels: enhancement
 assignees: ''
-
 ---
 
-## Is your feature request related to a problem? Please describe.
-<!--
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
--->
+## Problem or use case
 
+<!-- Describe the workflow or device-management problem this would solve. -->
 
-## Describe the solution you'd like
-<!--
-A clear and concise description of what you want to happen.
--->
+## Proposed behavior
 
+<!-- Describe what LinkPi Monitor should do. -->
 
-## Describe alternatives you've considered
-<!--
-A clear and concise description of any alternative solutions or features you've considered.
--->
+## LinkPi environment
 
+<!-- Include the relevant LinkPi model and firmware version, if applicable. -->
 
 ## Additional context
-<!--
-Add any other context or screenshots about the feature request here.
--->
+
+<!-- Add mockups, screenshots, or API observations if useful. Hide usernames, passwords, API keys, and stream keys. -->

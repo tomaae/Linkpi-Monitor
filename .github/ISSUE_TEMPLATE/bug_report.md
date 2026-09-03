@@ -1,46 +1,40 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: "[Bug]"
+about: Report a reproducible LinkPi Monitor problem
+title: "[Bug] "
 labels: bug
 assignees: ''
-
 ---
 
-## Describe the issue
+## Describe the problem
+
+<!-- What happened, and what were you trying to do? -->
+
+## Environment
+
 <!--
-A clear and concise description of what the issue is.
+- LinkPi Monitor version or commit:
+- Windows version:
+- LinkPi model:
+- LinkPi firmware version:
 -->
 
+## Steps to reproduce
 
-## How to reproduce the issue
 <!--
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. See error
+1. Select ...
+2. Open ...
+3. Observe ...
 -->
-
 
 ## Expected behavior
-<!--
-A clear and concise description of what you expected to happen.
--->
-
 
 ## Screenshots
-<!--
-If applicable, add screenshots to help explain your problem.
--->
 
+<!-- Add screenshots if they help. Hide usernames, passwords, API keys, and stream keys before uploading. -->
 
-## Traceback/Error logs
-<!--
-  If you come across any trace or error logs, please provide them.
--->
+## Error details or logs
 
+<!-- Paste complete error text if available. Do not include config.json or credentials. -->
 
 ## Additional context
-<!--
-Add any other context about the problem here.
--->

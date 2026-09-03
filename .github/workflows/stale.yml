@@ -1,20 +1,29 @@
-name: 'Stale'
+name: Stale issues
+
 on:
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:
 
+permissions:
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: stale-${{ github.repository }}
+
 jobs:
   stale:
-    name: Stale
+    name: Mark inactive issues
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: "actions/stale@v11"
+      - uses: actions/stale@v11
         with:
           stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs.'
-          stale-pr-message: 'This PR has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs.'
           close-issue-message: 'This issue was closed because it has been stalled for 5 days with no activity.'
-          days-before-stale: 14
-          days-before-close: 7
+          days-before-issue-stale: 14
+          days-before-issue-close: 7
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
           exempt-issue-labels: 'pinned,security,planned,help wanted'
-          exempt-pr-labels: 'pinned,security,planned,help wanted'

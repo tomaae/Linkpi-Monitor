@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  windows:
+    name: Package and release Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.302
+
+      - name: Build, test, and package
+        shell: pwsh
+        run: ./Publish.ps1 -NoPause
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: LinkpiMonitor-${{ github.ref_name }}-win-x64
+          path: artifacts/LinkpiMonitor-win-x64.zip
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create $env:GITHUB_REF_NAME
+          'artifacts/LinkpiMonitor-win-x64.zip#LinkPi Monitor for Windows x64'
+          --repo 'tomaae/Linkpi-Monitor'
+          --verify-tag
+          --generate-notes
+          --title $env:GITHUB_REF_NAME
