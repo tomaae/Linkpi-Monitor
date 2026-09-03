@@ -97,14 +97,6 @@
                 <TabItem Header="Sources &amp; Streams">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="6,14,6,20">
-                            <Grid Margin="2,0,2,14">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="Sources &amp; streams" FontSize="25" FontWeight="SemiBold" />
-                                    <TextBlock Text="Decode, encode and output status are grouped per source. HDMI, USB camera and Mix remain first-class channels."
-                                               Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
-                                </StackPanel>
-                            </Grid>
                             <ItemsControl ItemsSource="{Binding Channels}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
@@ -172,13 +164,6 @@
                 <TabItem Header="Push">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="6,14,6,20">
-                            <Grid Margin="2,0,2,14">
-                                <StackPanel>
-                                    <TextBlock Text="Push destinations" FontSize="25" FontWeight="SemiBold" />
-                                    <TextBlock Text="Configured publishing targets and their current transfer state. Full paths are available under Configuration."
-                                               Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
-                                </StackPanel>
-                            </Grid>
                             <ItemsControl ItemsSource="{Binding PushDestinations}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>

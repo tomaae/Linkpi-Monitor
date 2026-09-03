@@ -67,12 +67,8 @@
     </UserControl.Resources>
 
     <Grid Margin="6,14,6,20">
-        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-        <StackPanel Margin="2,0,2,14">
-            <TextBlock Text="Hardware" FontSize="25" FontWeight="SemiBold" />
-            <TextBlock Text="Physical audio and display interfaces reported by this LinkPi model." Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
-        </StackPanel>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel>
+        <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
             <StackPanel Visibility="{Binding UsbAudioVisibility}">
                 <TextBlock Text="Audio input" FontSize="20" FontWeight="SemiBold" Margin="2,0,0,10" />
                 <Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding UsbAudioInput}" ContentTemplate="{StaticResource AudioInputTemplate}" /></Border>
@@ -94,9 +90,8 @@
                 <ItemsControl ItemsSource="{Binding VideoOutputs}" ItemTemplate="{StaticResource VideoOutputTemplate}" />
             </StackPanel>
         </StackPanel></ScrollViewer>
-        <Grid Grid.Row="2" Margin="0,12,0,0">
+        <Grid Grid.Row="1" Margin="0,12,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <TextBlock Text="Saving is available only for devices explicitly allowed to receive configuration changes." Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
             <Button x:Name="SaveButton" Grid.Column="1" Content="Save changes" Click="SaveButton_Click" />
         </Grid>
     </Grid>
