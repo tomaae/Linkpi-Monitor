@@ -103,8 +103,6 @@
                                     <TextBlock Text="Decode, encode and output status are grouped per source. HDMI, USB camera and Mix remain first-class channels."
                                                Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
                                 </StackPanel>
-                                <Button Grid.Column="1" Content="Edit channel order" IsEnabled="False" VerticalAlignment="Center"
-                                        ToolTip="Channel editing is not implemented yet." />
                             </Grid>
                             <ItemsControl ItemsSource="{Binding Channels}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>

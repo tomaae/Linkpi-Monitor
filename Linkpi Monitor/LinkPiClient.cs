@@ -195,9 +195,36 @@ public sealed class LinkPiClient : IDisposable
         var net = GetObject(channel, "net");
         var cap = GetObject(channel, "cap");
         var crop = GetObject(cap, "crop");
+        var capture = GetObject(channel, "capture");
+        var captureSize = $"{GetString(capture, "width", "1920")}x{GetString(capture, "height", "1080")}";
+        var isHdmi = type.Equals("vi", StringComparison.OrdinalIgnoreCase);
+        var isUsb = type.Equals("usb", StringComparison.OrdinalIgnoreCase);
 
         return new ChannelConfiguration
         {
+            General = new GeneralChannelConfiguration
+            {
+                Name = GetString(channel, "name"),
+                Enabled = GetBool(channel, "enable")
+            },
+            Input = new PhysicalInputConfiguration
+            {
+                IsHdmi = isHdmi,
+                IsUsbCamera = isUsb,
+                Interface = GetString(channel, "interface", isHdmi ? "HDMI" : "USB"),
+                Device = GetString(channel, "rdir", isUsb ? "No camera detected" : string.Empty),
+                CaptureSize = captureSize,
+                CaptureSizes = BuildCaptureSizeOptions(captureSize),
+                Framerate = GetString(capture, "framerate", "30"),
+                Rotate = GetString(cap, "rotate", "0"),
+                CropLeft = GetString(crop, "L", "0"),
+                CropTop = GetString(crop, "T", "0"),
+                CropRight = GetString(crop, "R", "0"),
+                CropBottom = GetString(crop, "B", "0"),
+                Contrast = GetString(cap, "contrast", "0"),
+                Deinterlace = GetBool(cap, "deinterlace"),
+                NtscCompatible = GetBool(cap, "ntsc")
+            },
             Decode = new DecodeConfiguration
             {
                 IsNetworkSource = type.Equals("net", StringComparison.OrdinalIgnoreCase),
@@ -396,6 +423,19 @@ public sealed class LinkPiClient : IDisposable
             standard.Insert(1, new SelectionOption("3840x2160", "4K (3840×2160)"));
         }
 
+        return EnsureOption(standard, current, current.Replace('x', '×'));
+    }
+
+    private static IReadOnlyList<SelectionOption> BuildCaptureSizeOptions(string current)
+    {
+        IReadOnlyList<SelectionOption> standard =
+        [
+            new("3840x2160", "4K (3840×2160)"),
+            new("1920x1080", "1080p (1920×1080)"),
+            new("1280x720", "720p (1280×720)"),
+            new("640x480", "VGA (640×480)"),
+            new("640x360", "360p (640×360)")
+        ];
         return EnsureOption(standard, current, current.Replace('x', '×'));
     }
 

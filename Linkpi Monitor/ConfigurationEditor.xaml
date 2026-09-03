@@ -140,16 +140,80 @@
         </Border>
 
         <TabControl Grid.Row="2">
-            <TabControl.Style>
-                <Style TargetType="TabControl" BasedOn="{StaticResource {x:Type TabControl}}">
-                    <Setter Property="SelectedIndex" Value="0" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding Configuration.Decode.IsNetworkSource}" Value="False">
-                            <Setter Property="SelectedIndex" Value="1" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </TabControl.Style>
+            <TabItem Header="General">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="6,4,6,20">
+                    <Border Style="{StaticResource ConfigCard}"><StackPanel>
+                        <TextBlock Text="Channel" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Text="Basic settings for this source and its encoders." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,14" />
+                        <TextBlock Text="CHANNEL NAME" Style="{StaticResource FieldLabel}" />
+                        <TextBox Text="{Binding Configuration.General.Name}" Style="{StaticResource ConfigTextBox}" />
+                        <CheckBox Content="Channel enabled" IsChecked="{Binding Configuration.General.Enabled}" Style="{StaticResource ConfigCheckBox}" />
+                    </StackPanel></Border>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Input">
+                <TabItem.Style>
+                    <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Configuration.Input.IsPhysicalInput}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TabItem.Style>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="6,4,6,20">
+                    <Border>
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource ConfigCard}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Configuration.Input.IsHdmi}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="HDMI input" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="Capture and picture processing for the physical HDMI input." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,14" />
+                            <UniformGrid Columns="3">
+                                <StackPanel><TextBlock Text="INTERFACE" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.Interface}" IsReadOnly="True" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="ROTATE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Input.Rotations}" SelectedItem="{Binding Configuration.Input.Rotate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="CONTRAST (0–63)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.Contrast}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="CROP LEFT (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.CropLeft}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="CROP TOP (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.CropTop}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="CROP RIGHT (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.CropRight}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="CROP BOTTOM (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.CropBottom}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                            </UniformGrid>
+                            <WrapPanel>
+                                <CheckBox Content="Full-framerate deinterlace" IsChecked="{Binding Configuration.Input.Deinterlace}" Style="{StaticResource ConfigCheckBox}" />
+                                <CheckBox Content="NTSC compatible" IsChecked="{Binding Configuration.Input.NtscCompatible}" Style="{StaticResource ConfigCheckBox}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border>
+                        <Border.Style>
+                            <Style TargetType="Border" BasedOn="{StaticResource ConfigCard}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Configuration.Input.IsUsbCamera}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock Text="USB camera input" FontSize="18" FontWeight="SemiBold" />
+                            <TextBlock Text="Camera identity and capture format for the physical USB input." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,14" />
+                            <TextBlock Text="CAMERA" Style="{StaticResource FieldLabel}" />
+                            <TextBox Text="{Binding Configuration.Input.Device}" IsReadOnly="True" Style="{StaticResource ConfigTextBox}" />
+                            <UniformGrid Columns="2">
+                                <StackPanel><TextBlock Text="VIDEO SIZE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Input.CaptureSizes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Configuration.Input.CaptureSize}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                <StackPanel><TextBlock Text="FRAMERATE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Input.Framerates}" IsEditable="True" Text="{Binding Configuration.Input.Framerate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Decode">
                 <TabItem.Style>
                     <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
@@ -171,7 +235,7 @@
                             <StackPanel><TextBlock Text="BUFFER MODE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Decode.BufferModes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Configuration.Decode.BufferMode}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="MINIMUM DELAY (MS)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Decode.MinimumDelay}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         </UniformGrid>
-                        <WrapPanel><CheckBox Content="Video decode" IsChecked="{Binding Configuration.Decode.DecodeVideo}" Style="{StaticResource ConfigCheckBox}" /><CheckBox Content="Audio decode" IsChecked="{Binding Configuration.Decode.DecodeAudio}" Style="{StaticResource ConfigCheckBox}" /><CheckBox Content="Channel enabled" IsChecked="{Binding Configuration.MainEncoder.Enabled}" Style="{StaticResource ConfigCheckBox}" /></WrapPanel>
+                        <WrapPanel><CheckBox Content="Video decode" IsChecked="{Binding Configuration.Decode.DecodeVideo}" Style="{StaticResource ConfigCheckBox}" /><CheckBox Content="Audio decode" IsChecked="{Binding Configuration.Decode.DecodeAudio}" Style="{StaticResource ConfigCheckBox}" /></WrapPanel>
                     </StackPanel></Border>
                     <Border Style="{StaticResource ConfigCard}"><StackPanel>
                         <TextBlock Text="Picture transform" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14" />

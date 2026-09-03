@@ -7,6 +7,8 @@ public sealed record SelectionOption(string Value, string Label);
 
 public sealed class ChannelConfiguration
 {
+    public GeneralChannelConfiguration General { get; init; } = new();
+    public PhysicalInputConfiguration Input { get; init; } = new();
     public DecodeConfiguration Decode { get; init; } = new();
     public EncoderConfiguration MainEncoder { get; init; } = new();
     public EncoderConfiguration SubEncoder { get; init; } = new();
@@ -16,6 +18,35 @@ public sealed class ChannelConfiguration
     public HlsConfiguration Hls { get; init; } = new();
     public TransportStreamConfiguration Transport { get; init; } = new();
     public NdiConfiguration Ndi { get; init; } = new();
+}
+
+public sealed class GeneralChannelConfiguration
+{
+    public string Name { get; set; } = string.Empty;
+    public bool Enabled { get; set; }
+}
+
+public sealed class PhysicalInputConfiguration
+{
+    public bool IsHdmi { get; init; }
+    public bool IsUsbCamera { get; init; }
+    public bool IsPhysicalInput => IsHdmi || IsUsbCamera;
+    public string Interface { get; init; } = string.Empty;
+    public string Device { get; init; } = string.Empty;
+    public string CaptureSize { get; set; } = string.Empty;
+    public string Framerate { get; set; } = string.Empty;
+    public string Rotate { get; set; } = "0";
+    public string CropLeft { get; set; } = "0";
+    public string CropTop { get; set; } = "0";
+    public string CropRight { get; set; } = "0";
+    public string CropBottom { get; set; } = "0";
+    public string Contrast { get; set; } = "0";
+    public bool Deinterlace { get; set; }
+    public bool NtscCompatible { get; set; }
+
+    public IReadOnlyList<SelectionOption> CaptureSizes { get; init; } = [];
+    public IReadOnlyList<string> Framerates { get; } = ["15", "20", "24", "25", "30", "50", "60"];
+    public IReadOnlyList<string> Rotations { get; } = ["0", "90", "180", "270"];
 }
 
 public sealed class DecodeConfiguration
