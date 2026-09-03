@@ -58,6 +58,7 @@ public sealed class LinkPiClient : IDisposable
             Channels = channels,
             PushDestinations = ParsePushDestinations(pushConfiguration, pushState, channels),
             PushConfiguration = pushConfiguration,
+            Hardware = ParseHardwareConfiguration(rawConfig, rawHardware, channels),
             IsPushing = GetBool(pushState, "pushing")
         };
     }
@@ -673,6 +674,121 @@ public sealed class LinkPiClient : IDisposable
         }
 
         return results;
+    }
+
+    private static HardwareConfiguration ParseHardwareConfiguration(
+        JsonElement config,
+        JsonElement hardware,
+        IReadOnlyList<ChannelDisplay> channels)
+    {
+        var functions = GetObject(hardware, "function");
+        var capabilities = GetObject(hardware, "capability");
+        var hasLineAudio = GetBool(functions, "line");
+        var hasVideoOutput = GetBool(functions, "videoOut");
+        var chip = GetString(hardware, "chip");
+        var hasUsbAudio = !string.IsNullOrWhiteSpace(chip) &&
+            !chip.Equals("HI3516CV610", StringComparison.OrdinalIgnoreCase);
+        var mix = config.ValueKind == JsonValueKind.Array
+            ? config.EnumerateArray().FirstOrDefault(channel => GetInt(channel, "id", -1) == 8)
+            : default;
+        var usbInput = GetObject(mix, "inputUsbAlsa");
+        var lineInput = GetObject(mix, "inputLine");
+        var lineOutput = GetObject(mix, "outputLine");
+        var sourceOptions = channels.Select(channel => new SelectionOption(
+            channel.Id.ToString(CultureInfo.InvariantCulture), channel.Name)).ToArray();
+        var audioOutputSources = new List<SelectionOption>
+        {
+            new("line", "Line input"),
+            new("usbAlsa", "USB microphone")
+        };
+        audioOutputSources.AddRange(sourceOptions);
+        var currentAudioOutput = GetString(lineOutput, "src");
+        var videoOutputs = new List<VideoOutputConfiguration>();
+
+        if (hasVideoOutput)
+        {
+            AddVideoOutput(videoOutputs, GetObject(mix, "output"), "HDMI output", sourceOptions, capabilities, alwaysVisible: true);
+            AddVideoOutput(videoOutputs, GetObject(mix, "output2"), "Secondary output", sourceOptions, capabilities, alwaysVisible: false);
+        }
+
+        return new HardwareConfiguration
+        {
+            Model = GetString(hardware, "model", GetString(hardware, "fac")),
+            Chip = chip,
+            HasLineAudio = hasLineAudio,
+            HasUsbAudioInput = hasUsbAudio,
+            HasVideoOutput = hasVideoOutput && videoOutputs.Count > 0,
+            UsbAudioInput = ParseAudioInput(usbInput, "USB microphone", canDisable: true),
+            LineAudioInput = ParseAudioInput(lineInput, "Line input", canDisable: false),
+            LineAudioOutput = new AudioOutputConfiguration
+            {
+                Source = currentAudioOutput,
+                Sources = EnsureOption(audioOutputSources, currentAudioOutput, $"Source {currentAudioOutput}"),
+                Gain = GetString(lineOutput, "gain", "0")
+            },
+            VideoOutputs = videoOutputs
+        };
+    }
+
+    private static AudioInputConfiguration ParseAudioInput(JsonElement input, string fallbackName, bool canDisable) => new()
+    {
+        Name = GetString(input, "name", fallbackName),
+        Device = GetString(input, "usbid", canDisable ? "Not connected" : "Analog audio jack"),
+        NoiseReduction = GetString(input, "anr", "0"),
+        NoiseReductionLevel = GetString(input, "anr_level", "8"),
+        Gain = GetString(input, "gain", "0"),
+        Enabled = GetBool(input, "enable"),
+        CanDisable = canDisable
+    };
+
+    private static void AddVideoOutput(
+        ICollection<VideoOutputConfiguration> outputs,
+        JsonElement output,
+        string fallbackName,
+        IReadOnlyList<SelectionOption> sourceOptions,
+        JsonElement capabilities,
+        bool alwaysVisible)
+    {
+        if (output.ValueKind != JsonValueKind.Object || (!alwaysVisible && !GetBool(output, "ui")))
+        {
+            return;
+        }
+
+        var currentSource = GetString(output, "src");
+        var currentResolution = GetString(output, "output", "1080P60");
+        var csc = GetObject(output, "csc");
+        var resolutions = new List<string>
+        {
+            "480P60", "576P50", "720P50", "720P60", "1080I50", "1080I60",
+            "1080P24", "1080P25", "1080P30", "1080P50", "1080P60"
+        };
+        if (GetString(capabilities, "maxOutput").Contains("4K", StringComparison.OrdinalIgnoreCase))
+        {
+            resolutions.Add("4K30");
+        }
+        if (!resolutions.Contains(currentResolution, StringComparer.OrdinalIgnoreCase))
+        {
+            resolutions.Add(currentResolution);
+        }
+
+        outputs.Add(new VideoOutputConfiguration
+        {
+            Name = fallbackName,
+            Enabled = GetBool(output, "enable"),
+            Type = GetString(output, "type", "hdmi"),
+            Resolution = currentResolution,
+            Rotate = GetString(output, "rotate", "0"),
+            Mirror = GetBool(output, "mirror"),
+            Source = currentSource,
+            Sources = EnsureOption(sourceOptions, currentSource, $"Channel {currentSource}"),
+            LowLatency = GetBool(output, "lowLatency"),
+            ColorMatrix = GetString(csc, "matrix", "identity"),
+            Luma = GetString(csc, "luma", "50"),
+            Contrast = GetString(csc, "contrast", "50"),
+            Saturation = GetString(csc, "saturation", "50"),
+            Hue = GetString(csc, "hue", "50"),
+            Resolutions = resolutions
+        });
     }
 
     private (string Text, Brush Brush) GetChannelStatus(

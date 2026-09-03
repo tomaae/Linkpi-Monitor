@@ -11,9 +11,10 @@ A read-only Windows monitor for LinkPi encoder devices, built with C# and .NET 1
 - Show a current dashboard snapshot for every enabled, decodable channel.
 - Watch an advertised RTSP stream directly inside LinkPi Monitor.
 - Show publishing status and bitrate without exposing stream keys.
-- Inspect and locally experiment with complete Decode, Encode and Stream configuration controls.
+- Inspect and locally experiment with complete source, Decode, Encode, Stream, Push and hardware configuration controls.
+- Detect and display the selected LinkPi model, then expose only the physical interfaces reported by that model.
 
-The configuration window populates its controls from the selected device, including separate main/sub video encoders and outputs, the shared audio encoder, network decode and picture transforms, protocol-specific settings, MPEG-TS, HLS and NDI. Controls are selectable for interface testing, but Save remains disabled and no configuration update is sent to the device.
+The configuration windows populate their controls from the selected device. Channel configuration includes an editable channel name, HDMI or USB-camera capture settings where applicable, separate main/sub video encoders and outputs, the shared audio encoder, network decode and picture transforms, protocol-specific settings, MPEG-TS, HLS and NDI. Push configuration includes global autorun and complete destination settings while keeping full publishing URLs out of the dashboard. The capability-aware Hardware tab covers USB audio input, analog audio-jack input/output, and physical HDMI display output when the selected model reports those interfaces. Controls are selectable for interface testing, but Save remains disabled and no configuration update is sent to the device.
 
 Preview cards use the same `enc.snap` plus `snap/snap{id}.jpg` cycle as the device dashboard, but only once per configured monitor refresh rather than twice per second. Snapshot failures are isolated per channel. The app never invokes an update/start/stop method.
 

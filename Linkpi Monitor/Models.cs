@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace Linkpi_Monitor;
 
@@ -11,6 +12,7 @@ public sealed class LinkPiSnapshot
     public required IReadOnlyList<ChannelDisplay> Channels { get; init; }
     public required IReadOnlyList<PushDisplay> PushDestinations { get; init; }
     public required PushConfiguration PushConfiguration { get; init; }
+    public required HardwareConfiguration Hardware { get; init; }
     public bool IsPushing { get; init; }
 }
 
@@ -99,5 +101,91 @@ public sealed class PushDestinationConfiguration : ConfigurationSection
     [
         new(string.Empty, "Normal"),
         new("ext_header", "Enhanced RTMP")
+    ];
+}
+
+public sealed class HardwareConfiguration
+{
+    public string Model { get; init; } = string.Empty;
+    public string Chip { get; init; } = string.Empty;
+    public bool HasLineAudio { get; init; }
+    public bool HasUsbAudioInput { get; init; }
+    public bool HasVideoOutput { get; init; }
+    public AudioInputConfiguration UsbAudioInput { get; init; } = new();
+    public AudioInputConfiguration LineAudioInput { get; init; } = new();
+    public AudioOutputConfiguration LineAudioOutput { get; init; } = new();
+    public IReadOnlyList<VideoOutputConfiguration> VideoOutputs { get; init; } = [];
+    public Visibility UsbAudioVisibility => HasUsbAudioInput ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility LineAudioVisibility => HasLineAudio ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility VideoOutputVisibility => HasVideoOutput ? Visibility.Visible : Visibility.Collapsed;
+    public bool HasHardwareControls => HasLineAudio || HasUsbAudioInput || HasVideoOutput;
+}
+
+public sealed class AudioInputConfiguration
+{
+    public string Name { get; set; } = string.Empty;
+    public string Device { get; init; } = string.Empty;
+    public string NoiseReduction { get; set; } = "0";
+    public string NoiseReductionLevel { get; set; } = "8";
+    public string Gain { get; set; } = "0";
+    public bool Enabled { get; set; }
+    public bool CanDisable { get; init; }
+    public Visibility EnabledVisibility => CanDisable ? Visibility.Visible : Visibility.Collapsed;
+    public IReadOnlyList<SelectionOption> NoiseReductionModes { get; } =
+    [
+        new("0", "Disabled"),
+        new("1", "Enabled")
+    ];
+    public IReadOnlyList<string> NoiseReductionLevels { get; } =
+        Enumerable.Range(1, 16).Select(value => value.ToString()).ToArray();
+    public IReadOnlyList<SelectionOption> Gains { get; } = AudioGainOptions.All;
+}
+
+public sealed class AudioOutputConfiguration
+{
+    public string Source { get; set; } = string.Empty;
+    public string Gain { get; set; } = "0";
+    public IReadOnlyList<SelectionOption> Sources { get; init; } = [];
+    public IReadOnlyList<SelectionOption> Gains { get; } = AudioGainOptions.All;
+}
+
+public sealed class VideoOutputConfiguration
+{
+    public string Name { get; init; } = "HDMI output";
+    public bool Enabled { get; set; }
+    public string Type { get; set; } = "hdmi";
+    public string Resolution { get; set; } = "1080P60";
+    public string Rotate { get; set; } = "0";
+    public bool Mirror { get; set; }
+    public string Source { get; set; } = string.Empty;
+    public bool LowLatency { get; set; }
+    public string ColorMatrix { get; set; } = "identity";
+    public string Luma { get; set; } = "50";
+    public string Contrast { get; set; } = "50";
+    public string Saturation { get; set; } = "50";
+    public string Hue { get; set; } = "50";
+    public IReadOnlyList<SelectionOption> Sources { get; init; } = [];
+    public IReadOnlyList<SelectionOption> Types { get; } =
+    [
+        new("hdmi", "HDMI"),
+        new("dvi", "DVI")
+    ];
+    public IReadOnlyList<string> Resolutions { get; init; } = [];
+    public IReadOnlyList<string> Rotations { get; } = ["0", "90", "180", "270"];
+    public IReadOnlyList<SelectionOption> ColorMatrices { get; } =
+    [
+        new("identity", "Identity"),
+        new("601_709", "BT.601 to BT.709"),
+        new("709_601", "BT.709 to BT.601")
+    ];
+}
+
+internal static class AudioGainOptions
+{
+    public static IReadOnlyList<SelectionOption> All { get; } =
+    [
+        new("24", "+24 dB"), new("18", "+18 dB"), new("12", "+12 dB"),
+        new("6", "+6 dB"), new("0", "0 dB"), new("-6", "-6 dB"),
+        new("-12", "-12 dB"), new("-18", "-18 dB"), new("-24", "-24 dB")
     ];
 }

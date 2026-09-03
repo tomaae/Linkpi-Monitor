@@ -38,6 +38,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _temperatureDisplay = "—";
     private string _errorMessage = string.Empty;
     private PushConfiguration? _pushConfiguration;
+    private HardwareConfiguration? _hardware;
+    private string _deviceModelDisplay = "No device selected";
 
     public MainWindow()
     {
@@ -50,6 +52,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<ChannelDisplay> Channels { get; } = [];
     public ObservableCollection<PushDisplay> PushDestinations { get; } = [];
     public bool HasPushConfiguration => _pushConfiguration is not null;
+    public HardwareConfiguration? Hardware
+    {
+        get => _hardware;
+        private set
+        {
+            if (SetField(ref _hardware, value))
+            {
+                OnPropertyChanged(nameof(HardwareVisibility));
+            }
+        }
+    }
+
+    public Visibility HardwareVisibility => Hardware?.HasHardwareControls == true
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
+    public string DeviceModelDisplay
+    {
+        get => _deviceModelDisplay;
+        private set => SetField(ref _deviceModelDisplay, value);
+    }
 
     public string ConnectionStatus
     {
@@ -157,6 +180,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Channels.Clear();
         PushDestinations.Clear();
         SetPushConfiguration(null);
+        Hardware = null;
+        DeviceModelDisplay = "Detecting model…";
         ConnectionStatus = "Connecting";
         ConnectionBrush = BusyBrush;
         ErrorMessage = string.Empty;
@@ -322,6 +347,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Channels.Clear();
         PushDestinations.Clear();
         SetPushConfiguration(null);
+        Hardware = null;
+        DeviceModelDisplay = "No device selected";
         CpuDisplay = "—";
         MemoryDisplay = "—";
         TemperatureDisplay = "—";
@@ -353,6 +380,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Replace(Channels, snapshot.Channels);
             Replace(PushDestinations, snapshot.PushDestinations);
             SetPushConfiguration(snapshot.PushConfiguration);
+            Hardware = snapshot.Hardware;
+            DeviceModelDisplay = string.IsNullOrWhiteSpace(snapshot.Hardware.Model)
+                ? DevicePicker.SelectedItem is DeviceSettings selectedDevice ? selectedDevice.Name : "Unknown LinkPi model"
+                : snapshot.Hardware.Model;
             CpuDisplay = $"{snapshot.CpuPercent}%";
             MemoryDisplay = $"{snapshot.MemoryPercent}%";
             TemperatureDisplay = $"{snapshot.TemperatureCelsius} °C";
