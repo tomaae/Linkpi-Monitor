@@ -116,7 +116,7 @@ dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 dotnet test '.\Linkpi Monitor.slnx'
 ```
 
-The automated save-transport tests use an in-memory HTTP handler and never contact a LinkPi device. They cover channel, Push, and hardware payloads; preservation of unrecognized firmware fields and JSON value types; dynamic Mix-channel discovery; and the guarantee that saving Push configuration does not invoke Push start or stop methods.
+The automated tests use isolated temporary files and an in-memory HTTP handler, so they never contact a LinkPi device. They cover settings migration and validation, video geometry, observable configuration models, snapshot and preview parsing, authentication, firmware error handling, channel/Push/hardware save payloads, preservation of unknown firmware fields and JSON value types, dynamic channel discovery, and the guarantee that saving Push configuration does not invoke Push start or stop methods. WPF presentation behavior and LibVLC playback remain manual integration-test areas.
 
 ## Create a release package
 
@@ -159,7 +159,7 @@ Firmware schemas differ between devices. The application preserves properties it
 
 ```text
 Linkpi Monitor/          WPF application
-Linkpi Monitor.Tests/    Isolated save-transport tests
+Linkpi Monitor.Tests/    Isolated unit and client integration tests
 docs/screenshots/        Sanitized README images
 Publish.ps1              Audited Windows x64 packaging script
 ```

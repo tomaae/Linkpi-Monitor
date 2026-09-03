@@ -153,7 +153,7 @@ public sealed class LinkPiClient : IDisposable
     {
         await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
         var current = await GetJsonAsync("config/push.json", cancellationToken).ConfigureAwait(false);
-        var root = JsonNode.Parse(current.GetRawText())?.AsObject()
+        var root = JsonNode.Parse(current.GetRawText()) as JsonObject
             ?? throw new InvalidOperationException("The LinkPi Push configuration is invalid.");
         root["autorun"] = configuration.AutorunStoredAsString
             ? JsonValue.Create(configuration.Autorun.ToString().ToLowerInvariant())
@@ -223,7 +223,7 @@ public sealed class LinkPiClient : IDisposable
     private async Task<JsonArray> GetMutableDefaultConfigurationAsync(CancellationToken cancellationToken)
     {
         var current = await GetJsonAsync("config/config.json", cancellationToken).ConfigureAwait(false);
-        return JsonNode.Parse(current.GetRawText())?.AsArray()
+        return JsonNode.Parse(current.GetRawText()) as JsonArray
             ?? throw new InvalidOperationException("The LinkPi channel configuration is invalid.");
     }
 

@@ -12,9 +12,14 @@ public sealed class AppSettings
 
     public static string ConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
 
-    public static async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
+    public static Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+        LoadAsync(ConfigPath, cancellationToken);
+
+    internal static async Task<AppSettings> LoadAsync(
+        string configPath,
+        CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(ConfigPath))
+        if (!File.Exists(configPath))
         {
             var defaultSettings = new AppSettings
             {
@@ -30,11 +35,11 @@ public sealed class AppSettings
                     }
                 ]
             };
-            await defaultSettings.SaveAsync(cancellationToken);
+            await defaultSettings.SaveAsync(configPath, cancellationToken);
             return defaultSettings;
         }
 
-        await using var stream = File.OpenRead(ConfigPath);
+        await using var stream = File.OpenRead(configPath);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var root = document.RootElement;
         var refreshSeconds = root.TryGetProperty("RefreshIntervalSeconds", out var refreshElement)
@@ -58,14 +63,17 @@ public sealed class AppSettings
         return new AppSettings { Devices = devices, RefreshIntervalSeconds = refreshSeconds };
     }
 
-    public async Task SaveAsync(CancellationToken cancellationToken = default)
+    public Task SaveAsync(CancellationToken cancellationToken = default) =>
+        SaveAsync(ConfigPath, cancellationToken);
+
+    internal async Task SaveAsync(string configPath, CancellationToken cancellationToken = default)
     {
-        var temporaryPath = $"{ConfigPath}.{Guid.NewGuid():N}.tmp";
+        var temporaryPath = $"{configPath}.{Guid.NewGuid():N}.tmp";
         try
         {
             var json = JsonSerializer.Serialize(this, SerializerOptions);
             await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
-            File.Move(temporaryPath, ConfigPath, true);
+            File.Move(temporaryPath, configPath, true);
         }
         finally
         {

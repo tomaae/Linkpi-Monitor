@@ -3,7 +3,7 @@
 **/node_modules/
 artifacts/
 .vs/
-TestResults/
+TestResults*/
 *.user
 *.suo
 *.userosscache
