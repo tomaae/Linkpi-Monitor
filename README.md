@@ -116,7 +116,7 @@ dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 dotnet test '.\Linkpi Monitor.slnx'
 ```
 
-The automated tests use isolated temporary files and an in-memory HTTP handler, so they never contact a LinkPi device. They cover settings migration and validation, video geometry, observable configuration models, snapshot and preview parsing, authentication, firmware error handling, channel/Push/hardware save payloads, preservation of unknown firmware fields and JSON value types, dynamic channel discovery, and the guarantee that saving Push configuration does not invoke Push start or stop methods. WPF presentation behavior and LibVLC playback remain manual integration-test areas.
+The automated tests use isolated temporary files and an in-memory HTTP handler, so they never contact a LinkPi device. They cover settings migration and validation, video geometry, observable configuration models, snapshot and preview parsing, authentication, firmware error handling, channel/Push/hardware save payloads, preservation of unknown firmware fields and JSON value types, dynamic channel discovery, and the guarantee that saving Push configuration does not invoke Push start or stop methods. CI also collects coverage for the testable application core and requires at least 90% line and 80% branch coverage. Generated XAML, WPF window event handlers, and LibVLC playback remain manual integration-test areas.
 
 ## Create a release package
 
