@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="Linkpi Monitor/Linkpi Monitor.csproj" />
+  <Project Path="Linkpi Monitor.Tests/Linkpi Monitor.Tests.csproj" />
 </Solution>

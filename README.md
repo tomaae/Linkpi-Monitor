@@ -46,6 +46,14 @@ dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 
 The Watch button opens the live feed in a dedicated embedded player window. The required LibVLC runtime is included in published packages; a separately installed media player is not required.
 
+## Tests
+
+```powershell
+dotnet test '.\Linkpi Monitor.slnx'
+```
+
+The save-transport tests use an in-memory HTTP handler and never contact a LinkPi device. They verify channel, Push and hardware payloads, preservation of unrecognized firmware fields and JSON value types, and that saving Push configuration does not invoke Push start or stop methods.
+
 ## Create a release package
 
 From the repository root:

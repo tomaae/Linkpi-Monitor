@@ -22,13 +22,18 @@ public sealed class LinkPiClient : IDisposable
     private int _requestId;
 
     public LinkPiClient(DeviceSettings device)
-    {
-        _device = device;
-        _httpClient = new HttpClient(new HttpClientHandler
+        : this(device, new HttpClientHandler
         {
             CookieContainer = new System.Net.CookieContainer(),
             AllowAutoRedirect = true
         })
+    {
+    }
+
+    internal LinkPiClient(DeviceSettings device, HttpMessageHandler handler)
+    {
+        _device = device;
+        _httpClient = new HttpClient(handler)
         {
             BaseAddress = new Uri(device.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute),
             Timeout = TimeSpan.FromSeconds(6)
