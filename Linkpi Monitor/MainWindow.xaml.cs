@@ -127,7 +127,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            _settings = await AppSettings.LoadAsync();
+            try
+            {
+                _settings = await AppSettings.LoadAsync();
+            }
+            catch (Exception exception)
+            {
+                ShowConfigurationError(exception);
+                return;
+            }
+
             foreach (var device in _settings.Devices)
             {
                 Devices.Add(device);
@@ -423,6 +432,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ConnectionStatus = "Unavailable";
         ConnectionBrush = OfflineBrush;
         ErrorMessage = $"Could not refresh the selected LinkPi: {exception.Message}";
+    }
+
+    private void ShowConfigurationError(Exception exception)
+    {
+        DeviceModelDisplay = "Configuration unavailable";
+        ConnectionStatus = "Configuration error";
+        ConnectionBrush = OfflineBrush;
+        ErrorMessage = $"Could not load config.json: {exception.Message}";
     }
 
     private void WatchButton_Click(object sender, RoutedEventArgs e)

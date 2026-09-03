@@ -42,24 +42,54 @@ public sealed class AppSettings
         await using var stream = File.OpenRead(configPath);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var root = document.RootElement;
-        var refreshSeconds = root.TryGetProperty("RefreshIntervalSeconds", out var refreshElement)
-            ? Math.Clamp(refreshElement.GetInt32(), 2, 300)
-            : 5;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw InvalidConfiguration("The root value must be a JSON object.");
+        }
+
+        var refreshSeconds = 5;
+        if (root.TryGetProperty("RefreshIntervalSeconds", out var refreshElement))
+        {
+            if (refreshElement.ValueKind != JsonValueKind.Number || !refreshElement.TryGetInt32(out refreshSeconds))
+            {
+                throw InvalidConfiguration("RefreshIntervalSeconds must be a whole number.");
+            }
+
+            refreshSeconds = Math.Clamp(refreshSeconds, 2, 300);
+        }
 
         var devices = new List<DeviceSettings>();
-        if (root.TryGetProperty("Devices", out var deviceArray) && deviceArray.ValueKind == JsonValueKind.Array)
+        if (root.TryGetProperty("Devices", out var deviceArray))
         {
+            if (deviceArray.ValueKind != JsonValueKind.Array)
+            {
+                throw InvalidConfiguration("Devices must be a JSON array.");
+            }
+
+            var index = 0;
             foreach (var element in deviceArray.EnumerateArray())
             {
-                devices.Add(ReadDevice(element));
+                devices.Add(ReadDevice(element, $"Devices[{index}]"));
+                index++;
             }
         }
         else if (root.TryGetProperty("LinkPi", out var legacyDevice))
         {
-            devices.Add(ReadDevice(legacyDevice));
+            devices.Add(ReadDevice(legacyDevice, "LinkPi"));
+        }
+        else
+        {
+            throw InvalidConfiguration("Either Devices or the legacy LinkPi device must be present.");
         }
 
-        devices.RemoveAll(device => string.IsNullOrWhiteSpace(device.BaseUrl));
+        var duplicate = devices
+            .GroupBy(device => device.BaseUrl, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+        {
+            throw InvalidConfiguration($"The device URL '{duplicate.Key}' is configured more than once.");
+        }
+
         return new AppSettings { Devices = devices, RefreshIntervalSeconds = refreshSeconds };
     }
 
@@ -84,16 +114,21 @@ public sealed class AppSettings
         }
     }
 
-    private static DeviceSettings ReadDevice(JsonElement element)
+    private static DeviceSettings ReadDevice(JsonElement element, string location)
     {
-        var baseUrl = ReadString(element, "BaseUrl").TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUri) ||
-            (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+        if (element.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidDataException($"'{baseUrl}' is not a valid HTTP or HTTPS LinkPi BaseUrl.");
+            throw InvalidConfiguration($"{location} must be a JSON object.");
         }
 
-        var name = ReadString(element, "Name");
+        var baseUrl = ReadString(element, "BaseUrl", location, required: true);
+        if (!TryNormalizeBaseUrl(baseUrl, out var normalizedBaseUrl, out var validationMessage))
+        {
+            throw InvalidConfiguration($"{location}.BaseUrl {validationMessage}");
+        }
+
+        var parsedUri = new Uri(normalizedBaseUrl, UriKind.Absolute);
+        var name = ReadString(element, "Name", location).Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
             name = parsedUri.Host;
@@ -102,16 +137,74 @@ public sealed class AppSettings
         return new DeviceSettings
         {
             Name = name,
-            BaseUrl = baseUrl,
-            Username = ReadString(element, "Username"),
-            Password = ReadString(element, "Password")
+            BaseUrl = normalizedBaseUrl,
+            Username = ReadString(element, "Username", location).Trim(),
+            Password = ReadString(element, "Password", location)
         };
     }
 
-    private static string ReadString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
-            ? property.GetString() ?? string.Empty
-            : string.Empty;
+    private static string ReadString(
+        JsonElement element,
+        string propertyName,
+        string location,
+        bool required = false)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            if (required)
+            {
+                throw InvalidConfiguration($"{location}.{propertyName} is required.");
+            }
+
+            return string.Empty;
+        }
+
+        if (property.ValueKind != JsonValueKind.String)
+        {
+            throw InvalidConfiguration($"{location}.{propertyName} must be a string.");
+        }
+
+        var value = property.GetString() ?? string.Empty;
+        if (required && string.IsNullOrWhiteSpace(value))
+        {
+            throw InvalidConfiguration($"{location}.{propertyName} cannot be empty.");
+        }
+
+        return value;
+    }
+
+    internal static bool TryNormalizeBaseUrl(
+        string value,
+        out string normalizedBaseUrl,
+        out string validationMessage)
+    {
+        var baseUrl = value.Trim().TrimEnd('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUri) ||
+            string.IsNullOrWhiteSpace(parsedUri.Host) ||
+            (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+        {
+            normalizedBaseUrl = string.Empty;
+            validationMessage = "must be an absolute HTTP or HTTPS URL.";
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(parsedUri.UserInfo) ||
+            parsedUri.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(parsedUri.Query) ||
+            !string.IsNullOrEmpty(parsedUri.Fragment))
+        {
+            normalizedBaseUrl = string.Empty;
+            validationMessage = "must contain only a scheme, host, and optional port.";
+            return false;
+        }
+
+        normalizedBaseUrl = parsedUri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+        validationMessage = string.Empty;
+        return true;
+    }
+
+    private static InvalidDataException InvalidConfiguration(string message) =>
+        new($"Invalid config.json: {message}");
 
 }
 

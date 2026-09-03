@@ -99,7 +99,7 @@ On first launch, the application creates `config.json` beside the executable. Us
 }
 ```
 
-`RefreshIntervalSeconds` is clamped to 2–300 seconds. Only the selected device is polled. An empty device list is valid, and the legacy single-`LinkPi` configuration shape remains supported.
+The file is validated before any device connection is attempted. `Devices` must be an array (an empty array is valid), every entry must be an object with a unique absolute HTTP or HTTPS `BaseUrl`, and optional name and credential values must be strings. A base URL may contain a scheme, host, and optional port, but no credentials, path, query, or fragment. `RefreshIntervalSeconds` must be a whole number and is clamped to 2–300 seconds. Only the selected device is polled, and the legacy single-`LinkPi` configuration shape remains supported. Validation failures are shown in the main window without replacing the invalid file.
 
 > [!IMPORTANT]
 > `config.json` stores credentials as plain local JSON. It is excluded from Git and from release packages. Keep the application directory accessible only to trusted users and never commit the real file.

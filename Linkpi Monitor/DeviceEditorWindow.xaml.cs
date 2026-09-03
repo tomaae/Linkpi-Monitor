@@ -27,16 +27,17 @@ public partial class DeviceEditorWindow : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        var baseUrl = BaseUrlTextBox.Text.Trim().TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsedUri) ||
-            string.IsNullOrWhiteSpace(parsedUri.Host) ||
-            (parsedUri.Scheme != Uri.UriSchemeHttp && parsedUri.Scheme != Uri.UriSchemeHttps))
+        if (!AppSettings.TryNormalizeBaseUrl(
+                BaseUrlTextBox.Text,
+                out var baseUrl,
+                out var validationMessage))
         {
-            ShowValidation("Enter an absolute HTTP or HTTPS URL, for example http://192.168.1.100.");
+            ShowValidation($"Base URL {validationMessage} Example: http://192.168.1.100");
             BaseUrlTextBox.Focus();
             return;
         }
 
+        var parsedUri = new Uri(baseUrl, UriKind.Absolute);
         var name = NameTextBox.Text.Trim();
         Device = new DeviceSettings
         {

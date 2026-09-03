@@ -91,11 +91,23 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
-    public async Task MissingDeviceCollectionProducesEmptyList()
+    public async Task MissingDeviceCollectionIsRejected()
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
         await File.WriteAllTextAsync(path, "{}");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("Either Devices", exception.Message);
+    }
+
+    [Fact]
+    public async Task EmptyDeviceCollectionIsValid()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, "{\"Devices\":[]}");
 
         var settings = await AppSettings.LoadAsync(path);
 
@@ -104,10 +116,10 @@ public sealed class AppSettingsTests
     }
 
     [Theory]
-    [InlineData("ftp://encoder.test")]
-    [InlineData("encoder.test")]
-    [InlineData("")]
-    public async Task RejectsInvalidOrUnsupportedBaseUrl(string baseUrl)
+    [InlineData("ftp://encoder.test", "absolute HTTP or HTTPS")]
+    [InlineData("encoder.test", "absolute HTTP or HTTPS")]
+    [InlineData("", "cannot be empty")]
+    public async Task RejectsInvalidOrUnsupportedBaseUrl(string baseUrl, string expectedMessage)
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
@@ -118,7 +130,183 @@ public sealed class AppSettingsTests
 
         var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
 
-        Assert.Contains("valid HTTP or HTTPS", exception.Message);
+        Assert.Contains(expectedMessage, exception.Message);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("\"text\"")]
+    [InlineData("42")]
+    public async Task RejectsNonObjectRoot(string json)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, json);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("root value must be a JSON object", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("\"device\"")]
+    [InlineData("42")]
+    public async Task RejectsNonArrayDevices(string devicesJson)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":{{devicesJson}}}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("Devices must be a JSON array", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("\"5\"")]
+    [InlineData("1.5")]
+    [InlineData("true")]
+    [InlineData("null")]
+    public async Task RejectsNonIntegerRefreshInterval(string intervalJson)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(
+            path,
+            $$"""{"RefreshIntervalSeconds":{{intervalJson}},"Devices":[]}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("RefreshIntervalSeconds must be a whole number", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"device\"")]
+    [InlineData("1")]
+    public async Task RejectsNonObjectDeviceEntry(string deviceJson)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":[{{deviceJson}}]}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("Devices[0] must be a JSON object", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("{}", "is required")]
+    [InlineData("{\"BaseUrl\":null}", "must be a string")]
+    [InlineData("{\"BaseUrl\":42}", "must be a string")]
+    [InlineData("{\"BaseUrl\":\"   \"}", "cannot be empty")]
+    public async Task RejectsMissingOrInvalidBaseUrlProperty(string deviceJson, string expectedMessage)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":[{{deviceJson}}]}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("Devices[0].BaseUrl", exception.Message);
+        Assert.Contains(expectedMessage, exception.Message);
+    }
+
+    [Theory]
+    [InlineData("Name", "42")]
+    [InlineData("Username", "false")]
+    [InlineData("Password", "{}")]
+    public async Task RejectsNonStringOptionalDeviceProperty(string propertyName, string propertyJson)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(
+            path,
+            $$"""{"Devices":[{"BaseUrl":"http://encoder.test","{{propertyName}}":{{propertyJson}}}]}""");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains($"Devices[0].{propertyName} must be a string", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("http://user:password@encoder.test")]
+    [InlineData("http://encoder.test/api")]
+    [InlineData("http://encoder.test?mode=1")]
+    [InlineData("http://encoder.test/#settings")]
+    public async Task RejectsBaseUrlComponentsOutsideDeviceOrigin(string baseUrl)
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new
+        {
+            Devices = new[] { new { BaseUrl = baseUrl } }
+        }));
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("only a scheme, host, and optional port", exception.Message);
+    }
+
+    [Fact]
+    public async Task NormalizesWhitespaceNamesCredentialsAndDefaultPort()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, """
+            {"Devices":[{"Name":"  Studio  ","BaseUrl":"  HTTP://Encoder.Test:80///  ","Username":"  admin  ","Password":" password "}]}
+            """);
+
+        var device = Assert.Single((await AppSettings.LoadAsync(path)).Devices);
+
+        Assert.Equal("Studio", device.Name);
+        Assert.Equal("http://encoder.test", device.BaseUrl);
+        Assert.Equal("admin", device.Username);
+        Assert.Equal(" password ", device.Password);
+    }
+
+    [Fact]
+    public async Task RejectsDuplicateNormalizedDeviceUrls()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, """
+            {"Devices":[{"BaseUrl":"http://ENCODER.test"},{"BaseUrl":"http://encoder.test:80/"}]}
+            """);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("configured more than once", exception.Message);
+        Assert.Contains("http://encoder.test", exception.Message);
+    }
+
+    [Fact]
+    public async Task RejectsNonObjectLegacyDevice()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, "{\"LinkPi\":null}");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("LinkPi must be a JSON object", exception.Message);
+    }
+
+    [Fact]
+    public async Task InvalidConfigurationIsNotReplacedOrRewritten()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        const string invalidJson = "{\"Devices\":{\"BaseUrl\":\"http://encoder.test\"}}";
+        await File.WriteAllTextAsync(path, invalidJson);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Equal(invalidJson, await File.ReadAllTextAsync(path));
+        Assert.Single(Directory.GetFiles(temporary.Path));
     }
 
     [Fact]
