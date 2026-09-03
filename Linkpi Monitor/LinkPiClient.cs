@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -16,16 +17,243 @@ public sealed class LinkPiClient : IDisposable
 
     private readonly DeviceSettings _device;
     private readonly HttpClient _httpClient;
+    private readonly SemaphoreSlim _authenticationGate = new(1, 1);
+    private bool _authenticated;
     private int _requestId;
+
+    public bool CanSaveChanges => _device.CanSaveChanges;
 
     public LinkPiClient(DeviceSettings device)
     {
         _device = device;
-        _httpClient = new HttpClient
+        _httpClient = new HttpClient(new HttpClientHandler
+        {
+            CookieContainer = new System.Net.CookieContainer(),
+            AllowAutoRedirect = true
+        })
         {
             BaseAddress = new Uri(device.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute),
             Timeout = TimeSpan.FromSeconds(6)
         };
+    }
+
+    private void EnsureWritesAllowed()
+    {
+        if (_device.IsProtectedReadOnly || !_device.CanSaveChanges)
+        {
+            throw new InvalidOperationException(
+                $"Configuration changes are not allowed for '{_device.Name}'. Enable them in the local device editor first.");
+        }
+    }
+
+    private async Task EnsureAuthenticatedAsync(CancellationToken cancellationToken)
+    {
+        EnsureWritesAllowed();
+        if (_authenticated)
+        {
+            return;
+        }
+
+        await _authenticationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_authenticated)
+            {
+                return;
+            }
+
+            using var response = await _httpClient.PostAsync(
+                "link/action.php",
+                new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["username"] = _device.Username,
+                    ["password"] = _device.Password
+                }),
+                cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            ValidateResponseHost(response);
+            if (response.RequestMessage?.RequestUri?.AbsolutePath.EndsWith("login.php", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                throw new InvalidOperationException("LinkPi authentication failed.");
+            }
+
+            _authenticated = true;
+        }
+        finally
+        {
+            _authenticationGate.Release();
+        }
+    }
+
+    private void ValidateResponseHost(HttpResponseMessage response)
+    {
+        if (response.RequestMessage?.RequestUri is not { } uri ||
+            !uri.Host.Equals(_httpClient.BaseAddress!.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The LinkPi redirected the request to an unexpected host.");
+        }
+    }
+
+    public async Task SaveChannelConfigurationAsync(
+        int channelId,
+        ChannelConfiguration configuration,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureWritesAllowed();
+        var root = await GetMutableDefaultConfigurationAsync(cancellationToken).ConfigureAwait(false);
+        var channel = FindChannel(root, channelId);
+
+        channel["name"] = configuration.General.Name;
+        channel["enable"] = configuration.MainEncoder.Enabled;
+        channel["enable2"] = configuration.SubEncoder.Enabled;
+
+        if (configuration.Decode.IsNetworkSource)
+        {
+            var net = EnsureObject(channel, "net");
+            net["path"] = configuration.Decode.SourceUrl;
+            net["framerate"] = NumberOrString(net, "framerate", configuration.Decode.InputFramerate);
+            net["protocol"] = configuration.Decode.Protocol;
+            net["bufferMode"] = NumberOrString(net, "bufferMode", configuration.Decode.BufferMode);
+            net["minDelay"] = NumberOrString(net, "minDelay", configuration.Decode.MinimumDelay);
+            net["decodeV"] = configuration.Decode.DecodeVideo;
+            net["decodeA"] = configuration.Decode.DecodeAudio;
+            ApplyPictureTransform(channel, configuration.Decode.Rotate, configuration.Decode.CropLeft,
+                configuration.Decode.CropTop, configuration.Decode.CropRight, configuration.Decode.CropBottom,
+                configuration.Decode.Contrast,
+                configuration.Decode.HasDeinterlace ? configuration.Decode.Deinterlace : null,
+                null);
+        }
+        else if (configuration.Input.IsHdmi)
+        {
+            ApplyPictureTransform(channel, configuration.Input.Rotate, configuration.Input.CropLeft,
+                configuration.Input.CropTop, configuration.Input.CropRight, configuration.Input.CropBottom,
+                configuration.Input.Contrast,
+                configuration.Input.HasDeinterlace ? configuration.Input.Deinterlace : null,
+                configuration.Input.NtscCompatible);
+        }
+        else if (configuration.Input.IsUsbCamera)
+        {
+            var capture = EnsureObject(channel, "capture");
+            var size = configuration.Input.CaptureSize.Split('x', 2);
+            if (size.Length == 2)
+            {
+                capture["width"] = NumberOrString(capture, "width", size[0]);
+                capture["height"] = NumberOrString(capture, "height", size[1]);
+            }
+            capture["framerate"] = NumberOrString(capture, "framerate", configuration.Input.Framerate);
+        }
+
+        ApplyEncoder(EnsureObject(channel, "encv"), configuration.MainEncoder);
+        ApplyEncoder(EnsureObject(channel, "encv2"), configuration.SubEncoder);
+        ApplyAudioEncoder(EnsureObject(channel, "enca"), configuration.Audio);
+        ApplyStreamOutput(EnsureObject(channel, "stream"), configuration.MainStream);
+        ApplyStreamOutput(EnsureObject(channel, "stream2"), configuration.SubStream);
+        ApplyHls(EnsureObject(channel, "hls"), configuration.Hls);
+        ApplyTransport(EnsureObject(channel, "ts"), configuration.Transport);
+        ApplyNdi(EnsureObject(channel, "ndi"), configuration.Ndi);
+
+        await SaveDefaultConfigurationAsync(root, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SavePushConfigurationAsync(
+        PushConfiguration configuration,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureWritesAllowed();
+        await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
+        var current = await GetJsonAsync("config/push.json", cancellationToken).ConfigureAwait(false);
+        var root = JsonNode.Parse(current.GetRawText())?.AsObject()
+            ?? throw new InvalidOperationException("The LinkPi Push configuration is invalid.");
+        root["autorun"] = configuration.AutorunStoredAsString
+            ? JsonValue.Create(configuration.Autorun.ToString().ToLowerInvariant())
+            : JsonValue.Create(configuration.Autorun);
+        var existing = root["url"] as JsonArray;
+        var destinations = new JsonArray();
+
+        for (var index = 0; index < configuration.Destinations.Count; index++)
+        {
+            var target = index < existing?.Count && existing[index] is JsonObject existingObject
+                ? (JsonObject)existingObject.DeepClone()
+                : new JsonObject();
+            var source = configuration.Destinations[index];
+            target["des"] = source.Name;
+            target["enable"] = source.Enabled;
+            target["type"] = source.Type;
+            target["srcV"] = NumberOrString(target, "srcV", source.VideoSource);
+            target["srcA"] = NumberOrString(target, "srcA", source.AudioSource);
+            target["stream"] = source.Stream;
+            target["path"] = source.Url;
+            target["flvflags"] = source.Compatibility;
+            destinations.Add(target);
+        }
+
+        root["url"] = destinations;
+        var result = await InvokeRpcAsync(
+            "RPC",
+            "push.update",
+            [root.ToJsonString(new JsonSerializerOptions { WriteIndented = true })],
+            cancellationToken).ConfigureAwait(false);
+        if (result.ValueKind != JsonValueKind.True)
+        {
+            throw new InvalidOperationException("The LinkPi rejected the Push configuration.");
+        }
+    }
+
+    public async Task SaveHardwareConfigurationAsync(
+        HardwareConfiguration configuration,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureWritesAllowed();
+        var root = await GetMutableDefaultConfigurationAsync(cancellationToken).ConfigureAwait(false);
+        var mix = root.OfType<JsonObject>().FirstOrDefault(channel =>
+            string.Equals(channel["type"]?.ToString(), "mix", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("The LinkPi mix channel containing hardware settings was not found.");
+
+        if (configuration.HasUsbAudioInput)
+        {
+            ApplyAudioInput(EnsureObject(mix, "inputUsbAlsa"), configuration.UsbAudioInput, includeEnable: true);
+        }
+        if (configuration.HasLineAudio)
+        {
+            ApplyAudioInput(EnsureObject(mix, "inputLine"), configuration.LineAudioInput, includeEnable: false);
+            var lineOutput = EnsureObject(mix, "outputLine");
+            lineOutput["src"] = configuration.LineAudioOutput.SourceStoredAsString
+                ? JsonValue.Create(configuration.LineAudioOutput.Source)
+                : NumberOrString(configuration.LineAudioOutput.Source);
+            lineOutput["gain"] = NumberOrString(lineOutput, "gain", configuration.LineAudioOutput.Gain);
+        }
+        foreach (var videoOutput in configuration.VideoOutputs)
+        {
+            ApplyVideoOutput(EnsureObject(mix, videoOutput.ConfigurationKey), videoOutput);
+        }
+
+        await SaveDefaultConfigurationAsync(root, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<JsonArray> GetMutableDefaultConfigurationAsync(CancellationToken cancellationToken)
+    {
+        var current = await GetJsonAsync("config/config.json", cancellationToken).ConfigureAwait(false);
+        return JsonNode.Parse(current.GetRawText())?.AsArray()
+            ?? throw new InvalidOperationException("The LinkPi channel configuration is invalid.");
+    }
+
+    private async Task SaveDefaultConfigurationAsync(JsonArray root, CancellationToken cancellationToken)
+    {
+        EnsureWritesAllowed();
+        await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
+        using var response = await _httpClient.PostAsJsonAsync(
+            "link/relay.php",
+            new { url = "/conf/updateDefaultConf", data = root },
+            cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        ValidateResponseHost(response);
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!GetString(result, "status").Equals("success", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The LinkPi rejected the configuration: {GetString(result, "msg", "unknown error")}");
+        }
     }
 
     public async Task<LinkPiSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
@@ -89,13 +317,20 @@ public sealed class LinkPiClient : IDisposable
     private async Task<JsonElement> InvokeRpcAsync(
         string endpoint,
         string method,
+        CancellationToken cancellationToken) =>
+        await InvokeRpcAsync(endpoint, method, [], cancellationToken).ConfigureAwait(false);
+
+    private async Task<JsonElement> InvokeRpcAsync(
+        string endpoint,
+        string method,
+        IReadOnlyList<object?> parameters,
         CancellationToken cancellationToken)
     {
         var request = new
         {
             jsonrpc = "2.0",
             method,
-            @params = Array.Empty<object>(),
+            @params = parameters,
             id = Interlocked.Increment(ref _requestId)
         };
 
@@ -110,6 +345,220 @@ public sealed class LinkPiClient : IDisposable
         }
 
         return root.TryGetProperty("result", out var result) ? result.Clone() : default;
+    }
+
+    private static JsonObject FindChannel(JsonArray root, int channelId) =>
+        root.OfType<JsonObject>().FirstOrDefault(channel => GetNodeInt(channel, "id", -1) == channelId)
+        ?? throw new InvalidOperationException($"LinkPi channel {channelId} was not found.");
+
+    private static int GetNodeInt(JsonObject value, string propertyName, int fallback = 0) =>
+        int.TryParse(value[propertyName]?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private static JsonObject EnsureObject(JsonObject parent, string propertyName)
+    {
+        if (parent[propertyName] is JsonObject existing)
+        {
+            return existing;
+        }
+
+        var created = new JsonObject();
+        parent[propertyName] = created;
+        return created;
+    }
+
+    private static JsonNode NumberOrString(string value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
+            ? JsonValue.Create(number)
+            : JsonValue.Create(value);
+
+    private static JsonNode NumberOrString(JsonObject target, string propertyName, string value) =>
+        target[propertyName] is JsonValue existing && existing.TryGetValue<string>(out _)
+            ? JsonValue.Create(value)
+            : NumberOrString(value);
+
+    private static void ApplyPictureTransform(
+        JsonObject channel,
+        string rotate,
+        string cropLeft,
+        string cropTop,
+        string cropRight,
+        string cropBottom,
+        string contrast,
+        bool? deinterlace,
+        bool? ntscCompatible)
+    {
+        var cap = EnsureObject(channel, "cap");
+        var crop = EnsureObject(cap, "crop");
+        cap["rotate"] = NumberOrString(cap, "rotate", rotate);
+        cap["contrast"] = NumberOrString(cap, "contrast", contrast);
+        if (deinterlace.HasValue)
+        {
+            cap["deinterlace"] = deinterlace.Value;
+        }
+        if (ntscCompatible.HasValue)
+        {
+            cap["ntsc"] = ntscCompatible.Value;
+        }
+        crop["L"] = NumberOrString(crop, "L", cropLeft);
+        crop["T"] = NumberOrString(crop, "T", cropTop);
+        crop["R"] = NumberOrString(crop, "R", cropRight);
+        crop["B"] = NumberOrString(crop, "B", cropBottom);
+    }
+
+    private static void ApplyEncoder(JsonObject target, EncoderConfiguration source)
+    {
+        var size = source.VideoSize.Split('x', 2);
+        if (size.Length == 2)
+        {
+            target["width"] = NumberOrString(target, "width", size[0]);
+            target["height"] = NumberOrString(target, "height", size[1]);
+        }
+        var format = source.VideoFormat.Split(',', 2);
+        target["codec"] = format[0];
+        if (format.Length == 2)
+        {
+            target["profile"] = format[1];
+        }
+        target["rcmode"] = source.RateControl;
+        target["bitrate"] = NumberOrString(target, "bitrate", source.Bitrate);
+        target["framerate"] = NumberOrString(target, "framerate", source.Framerate);
+        target["gop"] = NumberOrString(target, "gop", source.Gop);
+        target["lowLatency"] = source.LowLatency;
+        target["gopmode"] = NumberOrString(target, "gopmode", source.GopMode);
+        target["minqp"] = NumberOrString(target, "minqp", source.MinimumQp);
+        target["maxqp"] = NumberOrString(target, "maxqp", source.MaximumQp);
+        target["Iqp"] = NumberOrString(target, "Iqp", source.FixedIQp);
+        target["Pqp"] = NumberOrString(target, "Pqp", source.FixedPQp);
+        var timestamp = source.TimestampMode.Split(',', 2);
+        target["syncTS"] = timestamp.Length > 0 && bool.TryParse(timestamp[0], out var sync) && sync;
+        if (timestamp.Length == 2)
+        {
+            target["syncTSMode"] = timestamp[1];
+        }
+    }
+
+    private static void ApplyAudioEncoder(JsonObject target, AudioEncoderConfiguration source)
+    {
+        target["codec"] = source.Codec;
+        target["audioSrc"] = NumberOrString(target, "audioSrc", source.Source);
+        target["gain"] = NumberOrString(target, "gain", source.Gain);
+        target["samplerate"] = NumberOrString(target, "samplerate", source.SampleRate);
+        target["channels"] = NumberOrString(target, "channels", source.Channels);
+        target["bitrate"] = NumberOrString(target, "bitrate", source.Bitrate);
+    }
+
+    private static void ApplyStreamOutput(JsonObject target, StreamOutputConfiguration source)
+    {
+        target["http"] = source.Http;
+        target["hls"] = source.Hls;
+        target["rtmp"] = source.Rtmp;
+        target["webrtc"] = source.WebRtc;
+        target["suffix"] = source.Suffix;
+
+        var rtsp = EnsureObject(target, "rtsp");
+        rtsp["enable"] = source.Rtsp.Enabled;
+        rtsp["name"] = source.Rtsp.Username;
+        rtsp["passwd"] = source.Rtsp.Password;
+        rtsp["auth"] = source.Rtsp.Authentication;
+        if (source.Rtsp.HasOnvif)
+        {
+            rtsp["onvif"] = source.Rtsp.Onvif;
+        }
+
+        var srt = EnsureObject(target, "srt");
+        srt["enable"] = source.Srt.Enabled;
+        srt["mode"] = source.Srt.Mode;
+        srt["ip"] = source.Srt.IpAddress;
+        if (source.Srt.HasStreamId)
+        {
+            srt["streamid"] = source.Srt.StreamId;
+        }
+        srt["port"] = NumberOrString(srt, "port", source.Srt.Port);
+        srt["latency"] = NumberOrString(srt, "latency", source.Srt.Latency);
+        srt["passwd"] = source.Srt.Password;
+
+        var udp = EnsureObject(target, "udp");
+        udp["enable"] = source.Udp.Enabled;
+        udp["ip"] = source.Udp.IpAddress;
+        udp["port"] = NumberOrString(udp, "port", source.Udp.Port);
+        udp["ttl"] = NumberOrString(udp, "ttl", source.Udp.Ttl);
+        udp["flowCtrl"] = source.Udp.FlowControl;
+        udp["bandwidth"] = NumberOrString(udp, "bandwidth", source.Udp.Bandwidth);
+        udp["rtp"] = source.Udp.RtpHeader;
+
+        var rist = EnsureObject(target, "rist");
+        rist["enable"] = source.Rist.Enabled;
+        rist["ip"] = source.Rist.IpAddress;
+        rist["port"] = NumberOrString(rist, "port", source.Rist.Port);
+
+        var push = EnsureObject(target, "push");
+        push["enable"] = source.Push.Enabled;
+        push["path"] = source.Push.Url;
+        push["format"] = source.Push.Format;
+        push["hevc_id"] = NumberOrString(push, "hevc_id", source.Push.HevcId);
+        push["flvflags"] = source.Push.Compatibility;
+    }
+
+    private static void ApplyHls(JsonObject target, HlsConfiguration source)
+    {
+        target["hls_time"] = NumberOrString(target, "hls_time", source.SegmentLength);
+        target["hls_list_size"] = NumberOrString(target, "hls_list_size", source.ListLength);
+        target["hls_base_url"] = source.BaseUrl;
+        target["hls_filename"] = source.Filename;
+    }
+
+    private static void ApplyTransport(JsonObject target, TransportStreamConfiguration source)
+    {
+        target["tsSize"] = NumberOrString(target, "tsSize", source.PacketSize);
+        target["mpegts_start_pid"] = NumberOrString(target, "mpegts_start_pid", source.Pid);
+        target["mpegts_pmt_start_pid"] = NumberOrString(target, "mpegts_pmt_start_pid", source.PmtPid);
+        target["mpegts_service_id"] = NumberOrString(target, "mpegts_service_id", source.ServiceId);
+        target["mpegts_transport_stream_id"] = NumberOrString(target, "mpegts_transport_stream_id", source.StreamId);
+        target["mpegts_original_network_id"] = NumberOrString(target, "mpegts_original_network_id", source.NetworkId);
+    }
+
+    private static void ApplyNdi(JsonObject target, NdiConfiguration source)
+    {
+        target["enable"] = source.Enabled;
+        target["name"] = source.Name;
+        target["group"] = source.Group;
+    }
+
+    private static void ApplyAudioInput(JsonObject target, AudioInputConfiguration source, bool includeEnable)
+    {
+        if (source.HasName)
+        {
+            target["name"] = source.Name;
+        }
+        target["anr"] = NumberOrString(target, "anr", source.NoiseReduction);
+        target["anr_level"] = NumberOrString(target, "anr_level", source.NoiseReductionLevel);
+        target["gain"] = NumberOrString(target, "gain", source.Gain);
+        if (includeEnable)
+        {
+            target["enable"] = source.Enabled;
+        }
+    }
+
+    private static void ApplyVideoOutput(JsonObject target, VideoOutputConfiguration source)
+    {
+        target["enable"] = source.Enabled;
+        target["type"] = source.Type;
+        target["output"] = source.Resolution;
+        target["rotate"] = NumberOrString(target, "rotate", source.Rotate);
+        if (source.HasMirror)
+        {
+            target["mirror"] = source.Mirror;
+        }
+        target["src"] = NumberOrString(target, "src", source.Source);
+        target["lowLatency"] = source.LowLatency;
+        var csc = EnsureObject(target, "csc");
+        csc["matrix"] = source.ColorMatrix;
+        csc["luma"] = source.ColorValuesStoredAsString ? JsonValue.Create(source.Luma) : NumberOrString(source.Luma);
+        csc["contrast"] = source.ColorValuesStoredAsString ? JsonValue.Create(source.Contrast) : NumberOrString(source.Contrast);
+        csc["saturation"] = source.ColorValuesStoredAsString ? JsonValue.Create(source.Saturation) : NumberOrString(source.Saturation);
+        csc["hue"] = source.ColorValuesStoredAsString ? JsonValue.Create(source.Hue) : NumberOrString(source.Hue);
     }
 
     private IReadOnlyList<ChannelDisplay> ParseChannels(
@@ -161,7 +610,7 @@ public sealed class LinkPiClient : IDisposable
             {
                 Id = id,
                 Name = name,
-                SourceType = GetSourceType(id, GetString(channel, "type")),
+                SourceType = GetSourceType(GetString(channel, "type")),
                 Status = status.Text,
                 StatusBrush = status.Brush,
                 Initial = string.IsNullOrWhiteSpace(name) ? id.ToString(CultureInfo.InvariantCulture) : name[..1].ToUpperInvariant(),
@@ -211,8 +660,7 @@ public sealed class LinkPiClient : IDisposable
         {
             General = new GeneralChannelConfiguration
             {
-                Name = GetString(channel, "name"),
-                Enabled = GetBool(channel, "enable")
+                Name = GetString(channel, "name")
             },
             Input = new PhysicalInputConfiguration
             {
@@ -230,6 +678,7 @@ public sealed class LinkPiClient : IDisposable
                 CropBottom = GetString(crop, "B", "0"),
                 Contrast = GetString(cap, "contrast", "0"),
                 Deinterlace = GetBool(cap, "deinterlace"),
+                HasDeinterlace = HasProperty(cap, "deinterlace"),
                 NtscCompatible = GetBool(cap, "ntsc")
             },
             Decode = new DecodeConfiguration
@@ -248,6 +697,7 @@ public sealed class LinkPiClient : IDisposable
                 CropRight = GetString(crop, "R", "0"),
                 CropBottom = GetString(crop, "B", "0"),
                 Deinterlace = GetBool(cap, "deinterlace"),
+                HasDeinterlace = HasProperty(cap, "deinterlace"),
                 Contrast = GetString(cap, "contrast", "0")
             },
             MainEncoder = ParseEncoder(GetObject(channel, "encv"), GetBool(channel, "enable"), supports4K, supportsBFrames),
@@ -333,7 +783,8 @@ public sealed class LinkPiClient : IDisposable
                 Username = GetString(rtsp, "name"),
                 Password = GetString(rtsp, "passwd"),
                 Authentication = GetBool(rtsp, "auth"),
-                Onvif = GetBool(rtsp, "onvif")
+                Onvif = GetBool(rtsp, "onvif"),
+                HasOnvif = HasProperty(rtsp, "onvif")
             },
             Srt = new SrtConfiguration
             {
@@ -341,6 +792,7 @@ public sealed class LinkPiClient : IDisposable
                 Mode = GetString(srt, "mode", "listener"),
                 IpAddress = GetString(srt, "ip"),
                 StreamId = GetString(srt, "streamid"),
+                HasStreamId = HasProperty(srt, "streamid"),
                 Port = GetString(srt, "port"),
                 Latency = GetString(srt, "latency"),
                 Password = GetString(srt, "passwd")
@@ -601,6 +1053,7 @@ public sealed class LinkPiClient : IDisposable
         var configuration = new PushConfiguration
         {
             Autorun = GetBool(pushConfig, "autorun"),
+            AutorunStoredAsString = PropertyIsString(pushConfig, "autorun"),
             VideoSources = videoSources,
             AudioSources = audioSources,
             Types = types
@@ -687,10 +1140,9 @@ public sealed class LinkPiClient : IDisposable
         var hasLineAudio = GetBool(functions, "line");
         var hasVideoOutput = GetBool(functions, "videoOut");
         var chip = GetString(hardware, "chip");
-        var hasUsbAudio = !string.IsNullOrWhiteSpace(chip) &&
-            !chip.Equals("HI3516CV610", StringComparison.OrdinalIgnoreCase);
         var mix = config.ValueKind == JsonValueKind.Array
-            ? config.EnumerateArray().FirstOrDefault(channel => GetInt(channel, "id", -1) == 8)
+            ? config.EnumerateArray().FirstOrDefault(channel =>
+                GetString(channel, "type").Equals("mix", StringComparison.OrdinalIgnoreCase))
             : default;
         var usbInput = GetObject(mix, "inputUsbAlsa");
         var lineInput = GetObject(mix, "inputLine");
@@ -708,8 +1160,8 @@ public sealed class LinkPiClient : IDisposable
 
         if (hasVideoOutput)
         {
-            AddVideoOutput(videoOutputs, GetObject(mix, "output"), "HDMI output", sourceOptions, capabilities, alwaysVisible: true);
-            AddVideoOutput(videoOutputs, GetObject(mix, "output2"), "Secondary output", sourceOptions, capabilities, alwaysVisible: false);
+            AddVideoOutput(videoOutputs, GetObject(mix, "output"), "output", "HDMI output", sourceOptions, capabilities, alwaysVisible: true);
+            AddVideoOutput(videoOutputs, GetObject(mix, "output2"), "output2", "Secondary output", sourceOptions, capabilities, alwaysVisible: false);
         }
 
         return new HardwareConfiguration
@@ -717,13 +1169,14 @@ public sealed class LinkPiClient : IDisposable
             Model = GetString(hardware, "model", GetString(hardware, "fac")),
             Chip = chip,
             HasLineAudio = hasLineAudio,
-            HasUsbAudioInput = hasUsbAudio,
+            HasUsbAudioInput = usbInput.ValueKind == JsonValueKind.Object,
             HasVideoOutput = hasVideoOutput && videoOutputs.Count > 0,
             UsbAudioInput = ParseAudioInput(usbInput, "USB microphone", canDisable: true),
             LineAudioInput = ParseAudioInput(lineInput, "Line input", canDisable: false),
             LineAudioOutput = new AudioOutputConfiguration
             {
                 Source = currentAudioOutput,
+                SourceStoredAsString = PropertyIsString(lineOutput, "src"),
                 Sources = EnsureOption(audioOutputSources, currentAudioOutput, $"Source {currentAudioOutput}"),
                 Gain = GetString(lineOutput, "gain", "0")
             },
@@ -734,6 +1187,7 @@ public sealed class LinkPiClient : IDisposable
     private static AudioInputConfiguration ParseAudioInput(JsonElement input, string fallbackName, bool canDisable) => new()
     {
         Name = GetString(input, "name", fallbackName),
+        HasName = HasProperty(input, "name"),
         Device = GetString(input, "usbid", canDisable ? "Not connected" : "Analog audio jack"),
         NoiseReduction = GetString(input, "anr", "0"),
         NoiseReductionLevel = GetString(input, "anr_level", "8"),
@@ -745,6 +1199,7 @@ public sealed class LinkPiClient : IDisposable
     private static void AddVideoOutput(
         ICollection<VideoOutputConfiguration> outputs,
         JsonElement output,
+        string configurationKey,
         string fallbackName,
         IReadOnlyList<SelectionOption> sourceOptions,
         JsonElement capabilities,
@@ -774,12 +1229,14 @@ public sealed class LinkPiClient : IDisposable
 
         outputs.Add(new VideoOutputConfiguration
         {
+            ConfigurationKey = configurationKey,
             Name = fallbackName,
             Enabled = GetBool(output, "enable"),
             Type = GetString(output, "type", "hdmi"),
             Resolution = currentResolution,
             Rotate = GetString(output, "rotate", "0"),
             Mirror = GetBool(output, "mirror"),
+            HasMirror = HasProperty(output, "mirror"),
             Source = currentSource,
             Sources = EnsureOption(sourceOptions, currentSource, $"Channel {currentSource}"),
             LowLatency = GetBool(output, "lowLatency"),
@@ -788,6 +1245,7 @@ public sealed class LinkPiClient : IDisposable
             Contrast = GetString(csc, "contrast", "50"),
             Saturation = GetString(csc, "saturation", "50"),
             Hue = GetString(csc, "hue", "50"),
+            ColorValuesStoredAsString = PropertyIsString(csc, "luma"),
             Resolutions = resolutions
         });
     }
@@ -900,14 +1358,15 @@ public sealed class LinkPiClient : IDisposable
         };
     }
 
-    private static string GetSourceType(int id, string configuredType) => id switch
+    private static string GetSourceType(string configuredType) => configuredType.ToLowerInvariant() switch
     {
-        0 => "HDMI input",
-        1 => "USB camera",
-        6 => "File source",
-        7 => "Color key",
-        8 => "Mix output",
-        _ when configuredType.Contains("net", StringComparison.OrdinalIgnoreCase) => "Network decoder",
+        "vi" => "HDMI input",
+        "usb" => "USB camera",
+        "file" => "File source",
+        "colorkey" => "Color key",
+        "image" => "Image source",
+        "mix" => "Mix output",
+        "net" => "Network decoder",
         _ => string.IsNullOrWhiteSpace(configuredType) ? "Stream" : configuredType
     };
 
@@ -939,6 +1398,14 @@ public sealed class LinkPiClient : IDisposable
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var property)
             ? property
             : default;
+
+    private static bool HasProperty(JsonElement element, string propertyName) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out _);
+
+    private static bool PropertyIsString(JsonElement element, string propertyName) =>
+        element.ValueKind == JsonValueKind.Object &&
+        element.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.String;
 
     private static string GetString(JsonElement element, string propertyName, string fallback = "")
     {
@@ -1001,5 +1468,9 @@ public sealed class LinkPiClient : IDisposable
         return brush;
     }
 
-    public void Dispose() => _httpClient.Dispose();
+    public void Dispose()
+    {
+        _authenticationGate.Dispose();
+        _httpClient.Dispose();
+    }
 }

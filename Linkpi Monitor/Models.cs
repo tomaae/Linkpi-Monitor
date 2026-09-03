@@ -66,6 +66,7 @@ public sealed class PushConfiguration : ConfigurationSection
     }
 
     public ObservableCollection<PushDestinationConfiguration> Destinations { get; init; } = [];
+    public bool AutorunStoredAsString { get; init; }
     public IReadOnlyList<SelectionOption> VideoSources { get; init; } = [];
     public IReadOnlyList<SelectionOption> AudioSources { get; init; } = [];
     public IReadOnlyList<SelectionOption> Types { get; init; } = [];
@@ -124,6 +125,7 @@ public sealed class HardwareConfiguration
 public sealed class AudioInputConfiguration
 {
     public string Name { get; set; } = string.Empty;
+    public bool HasName { get; init; }
     public string Device { get; init; } = string.Empty;
     public string NoiseReduction { get; set; } = "0";
     public string NoiseReductionLevel { get; set; } = "8";
@@ -144,6 +146,7 @@ public sealed class AudioInputConfiguration
 public sealed class AudioOutputConfiguration
 {
     public string Source { get; set; } = string.Empty;
+    public bool SourceStoredAsString { get; init; }
     public string Gain { get; set; } = "0";
     public IReadOnlyList<SelectionOption> Sources { get; init; } = [];
     public IReadOnlyList<SelectionOption> Gains { get; } = AudioGainOptions.All;
@@ -151,12 +154,14 @@ public sealed class AudioOutputConfiguration
 
 public sealed class VideoOutputConfiguration
 {
+    public string ConfigurationKey { get; init; } = "output";
     public string Name { get; init; } = "HDMI output";
     public bool Enabled { get; set; }
     public string Type { get; set; } = "hdmi";
     public string Resolution { get; set; } = "1080P60";
     public string Rotate { get; set; } = "0";
     public bool Mirror { get; set; }
+    public bool HasMirror { get; init; }
     public string Source { get; set; } = string.Empty;
     public bool LowLatency { get; set; }
     public string ColorMatrix { get; set; } = "identity";
@@ -164,6 +169,7 @@ public sealed class VideoOutputConfiguration
     public string Contrast { get; set; } = "50";
     public string Saturation { get; set; } = "50";
     public string Hue { get; set; } = "50";
+    public bool ColorValuesStoredAsString { get; init; }
     public IReadOnlyList<SelectionOption> Sources { get; init; } = [];
     public IReadOnlyList<SelectionOption> Types { get; } =
     [

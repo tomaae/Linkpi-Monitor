@@ -92,7 +92,8 @@
                 </Border>
             </Grid>
 
-            <TabControl Grid.Row="2" Margin="18,0,18,18" Background="Transparent" BorderThickness="0">
+            <TabControl x:Name="MainTabs" Grid.Row="2" Margin="18,0,18,18" Background="Transparent" BorderThickness="0"
+                        SelectionChanged="MainTabs_SelectionChanged">
                 <TabItem Header="Sources &amp; Streams">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="6,14,6,20">
@@ -209,7 +210,7 @@
                 </TabItem>
 
                 <TabItem Header="Hardware" Visibility="{Binding HardwareVisibility}">
-                    <local:HardwareEditor DataContext="{Binding Hardware}" />
+                    <local:HardwareEditor x:Name="HardwareConfigurationEditor" DataContext="{Binding Hardware}" />
                 </TabItem>
             </TabControl>
         </Grid>

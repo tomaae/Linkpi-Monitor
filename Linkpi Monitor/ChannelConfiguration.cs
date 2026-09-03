@@ -23,7 +23,6 @@ public sealed class ChannelConfiguration
 public sealed class GeneralChannelConfiguration
 {
     public string Name { get; set; } = string.Empty;
-    public bool Enabled { get; set; }
 }
 
 public sealed class PhysicalInputConfiguration
@@ -42,6 +41,7 @@ public sealed class PhysicalInputConfiguration
     public string CropBottom { get; set; } = "0";
     public string Contrast { get; set; } = "0";
     public bool Deinterlace { get; set; }
+    public bool HasDeinterlace { get; init; }
     public bool NtscCompatible { get; set; }
 
     public IReadOnlyList<SelectionOption> CaptureSizes { get; init; } = [];
@@ -65,6 +65,7 @@ public sealed class DecodeConfiguration
     public string CropRight { get; set; } = "0";
     public string CropBottom { get; set; } = "0";
     public bool Deinterlace { get; set; }
+    public bool HasDeinterlace { get; init; }
     public string Contrast { get; set; } = "0";
 
     public IReadOnlyList<SelectionOption> BufferModes { get; } =
@@ -226,6 +227,7 @@ public sealed class RtspConfiguration
     public string Password { get; set; } = string.Empty;
     public bool Authentication { get; set; }
     public bool Onvif { get; set; }
+    public bool HasOnvif { get; init; }
 }
 
 public sealed class SrtConfiguration
@@ -234,6 +236,7 @@ public sealed class SrtConfiguration
     public string Mode { get; set; } = "listener";
     public string IpAddress { get; set; } = string.Empty;
     public string StreamId { get; set; } = string.Empty;
+    public bool HasStreamId { get; init; }
     public string Port { get; set; } = string.Empty;
     public string Latency { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;

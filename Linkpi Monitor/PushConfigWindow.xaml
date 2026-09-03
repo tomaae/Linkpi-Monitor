@@ -83,7 +83,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <Button Grid.Column="0" Content="Add destination" Click="AddDestinationButton_Click" />
             <Button Grid.Column="2" Content="Remove destination" Click="RemoveDestinationButton_Click" />
-            <Button Grid.Column="4" Content="Save changes" IsEnabled="False" ToolTip="Saving configuration is not implemented yet." />
+            <Button x:Name="SaveButton" Grid.Column="4" Content="Save changes" Click="SaveButton_Click" />
             <Button Grid.Column="6" Content="Close" Style="{StaticResource PrimaryButton}" Click="CloseButton_Click" />
         </Grid>
     </Grid>

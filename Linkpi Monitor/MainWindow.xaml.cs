@@ -40,12 +40,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private PushConfiguration? _pushConfiguration;
     private HardwareConfiguration? _hardware;
     private string _deviceModelDisplay = "No device selected";
+    private bool _holdHardwareConfiguration;
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = this;
         _refreshTimer.Tick += RefreshTimer_Tick;
+        HardwareConfigurationEditor.SaveAsync = SaveHardwareConfigurationAsync;
     }
 
     public ObservableCollection<DeviceSettings> Devices { get; } = [];
@@ -379,7 +381,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Replace(Channels, snapshot.Channels);
             Replace(PushDestinations, snapshot.PushDestinations);
             SetPushConfiguration(snapshot.PushConfiguration);
-            Hardware = snapshot.Hardware;
+            if (!_holdHardwareConfiguration)
+            {
+                Hardware = snapshot.Hardware;
+            }
+            HardwareConfigurationEditor.SetSaveEnabled(_client.CanSaveChanges);
             DeviceModelDisplay = string.IsNullOrWhiteSpace(snapshot.Hardware.Model)
                 ? DevicePicker.SelectedItem is DeviceSettings selectedDevice ? selectedDevice.Name : "Unknown LinkPi model"
                 : snapshot.Hardware.Model;
@@ -430,25 +436,52 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         new WatchWindow(channel) { Owner = this }.Show();
     }
 
-    private void ConfigurationButton_Click(object sender, RoutedEventArgs e)
+    private async void ConfigurationButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: ChannelDisplay channel })
+        if (_client is not null && sender is Button { Tag: ChannelDisplay channel })
         {
-            new StreamConfigWindow(channel) { Owner = this }.ShowDialog();
+            if (new StreamConfigWindow(channel, _client) { Owner = this }.ShowDialog() == true)
+            {
+                await RefreshAsync();
+            }
         }
     }
 
-    private void PushDestinationConfigurationButton_Click(object sender, RoutedEventArgs e)
+    private async void PushDestinationConfigurationButton_Click(object sender, RoutedEventArgs e)
     {
         if (_pushConfiguration is not null && sender is Button { Tag: PushDisplay push })
         {
-            new PushConfigWindow(_pushConfiguration, push.Configuration) { Owner = this }.ShowDialog();
+            if (_client is not null && new PushConfigWindow(_pushConfiguration, _client, push.Configuration) { Owner = this }.ShowDialog() == true)
+            {
+                await RefreshAsync();
+            }
         }
     }
 
     private void SetPushConfiguration(PushConfiguration? configuration)
     {
         _pushConfiguration = configuration;
+    }
+
+    private async Task SaveHardwareConfigurationAsync(HardwareConfiguration configuration)
+    {
+        if (_client is null)
+        {
+            throw new InvalidOperationException("No LinkPi device is selected.");
+        }
+
+        await _client.SaveHardwareConfigurationAsync(configuration);
+        _holdHardwareConfiguration = false;
+        await RefreshAsync();
+        _holdHardwareConfiguration = MainTabs.SelectedItem is TabItem { Header: "Hardware" };
+    }
+
+    private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.Source == MainTabs)
+        {
+            _holdHardwareConfiguration = MainTabs.SelectedItem is TabItem { Header: "Hardware" };
+        }
     }
 
     private void Window_Closed(object? sender, EventArgs e)

@@ -5,13 +5,22 @@ namespace Linkpi_Monitor;
 public partial class PushConfigWindow : Window
 {
     private readonly PushConfiguration _configuration;
+    private readonly LinkPiClient _client;
 
-    public PushConfigWindow(PushConfiguration configuration, PushDestinationConfiguration? selectedDestination = null)
+    public PushConfigWindow(
+        PushConfiguration configuration,
+        LinkPiClient client,
+        PushDestinationConfiguration? selectedDestination = null)
     {
         InitializeComponent();
         _configuration = configuration;
+        _client = client;
         DataContext = configuration;
         DestinationTabs.SelectedItem = selectedDestination ?? configuration.Destinations.FirstOrDefault();
+        SaveButton.IsEnabled = client.CanSaveChanges;
+        SaveButton.ToolTip = client.CanSaveChanges
+            ? "Save all Push destination settings without starting or stopping Push."
+            : "Configuration changes are disabled for this device.";
     }
 
     private void AddDestinationButton_Click(object sender, RoutedEventArgs e)
@@ -33,6 +42,38 @@ public partial class PushConfigWindow : Window
         if (DestinationTabs.SelectedItem is PushDestinationConfiguration destination)
         {
             _configuration.Destinations.Remove(destination);
+        }
+    }
+
+    private async void SaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(
+                this,
+                "Save the displayed Push configuration? This does not start or stop publishing.",
+                "Save Push configuration",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        SaveButton.IsEnabled = false;
+        try
+        {
+            await _client.SavePushConfigurationAsync(_configuration);
+            MessageBox.Show(this, "Push configuration was saved. Publishing state was not changed.",
+                "Configuration saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            DialogResult = true;
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, $"Could not save the Push configuration.\n\n{exception.Message}",
+                "Save failed", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            SaveButton.IsEnabled = _client.CanSaveChanges;
         }
     }
 

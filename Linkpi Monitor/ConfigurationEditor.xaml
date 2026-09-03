@@ -78,7 +78,7 @@
                         <StackPanel><TextBlock Text="USERNAME" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Rtsp.Username}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="PASSWORD" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Rtsp.Password}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <CheckBox Content="Require authentication" IsChecked="{Binding Rtsp.Authentication}" Style="{StaticResource ConfigCheckBox}" />
-                        <CheckBox Content="Advertise through ONVIF" IsChecked="{Binding Rtsp.Onvif}" Style="{StaticResource ConfigCheckBox}" />
+                        <CheckBox Content="Advertise through ONVIF" IsChecked="{Binding Rtsp.Onvif}" IsEnabled="{Binding Rtsp.HasOnvif}" Style="{StaticResource ConfigCheckBox}" />
                     </UniformGrid>
                 </Expander>
                 <Expander Margin="0,10,0,0">
@@ -86,7 +86,7 @@
                     <UniformGrid Columns="2" Margin="0,12,0,0">
                         <StackPanel><TextBlock Text="MODE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Srt.Modes}" SelectedItem="{Binding Srt.Mode}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="IP ADDRESS" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.IpAddress}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
-                        <StackPanel><TextBlock Text="STREAM ID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.StreamId}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                        <StackPanel IsEnabled="{Binding Srt.HasStreamId}"><TextBlock Text="STREAM ID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.StreamId}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="PORT" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.Port}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="LATENCY (MS)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.Latency}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="PASSWORD" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.Password}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
@@ -147,7 +147,7 @@
                         <TextBlock Text="Basic settings for this source and its encoders." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,14" />
                         <TextBlock Text="CHANNEL NAME" Style="{StaticResource FieldLabel}" />
                         <TextBox Text="{Binding Configuration.General.Name}" Style="{StaticResource ConfigTextBox}" />
-                        <CheckBox Content="Channel enabled" IsChecked="{Binding Configuration.General.Enabled}" Style="{StaticResource ConfigCheckBox}" />
+                        <CheckBox Content="Channel enabled" IsChecked="{Binding Configuration.MainEncoder.Enabled}" Style="{StaticResource ConfigCheckBox}" />
                     </StackPanel></Border>
                 </StackPanel></ScrollViewer>
             </TabItem>
@@ -186,7 +186,7 @@
                                 <StackPanel><TextBlock Text="CROP BOTTOM (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Input.CropBottom}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             </UniformGrid>
                             <WrapPanel>
-                                <CheckBox Content="Full-framerate deinterlace" IsChecked="{Binding Configuration.Input.Deinterlace}" Style="{StaticResource ConfigCheckBox}" />
+                                <CheckBox Content="Full-framerate deinterlace" IsChecked="{Binding Configuration.Input.Deinterlace}" IsEnabled="{Binding Configuration.Input.HasDeinterlace}" Style="{StaticResource ConfigCheckBox}" />
                                 <CheckBox Content="NTSC compatible" IsChecked="{Binding Configuration.Input.NtscCompatible}" Style="{StaticResource ConfigCheckBox}" />
                             </WrapPanel>
                         </StackPanel>
@@ -242,7 +242,7 @@
                         <UniformGrid Columns="3">
                             <StackPanel><TextBlock Text="ROTATE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Decode.Rotations}" SelectedItem="{Binding Configuration.Decode.Rotate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="CONTRAST" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Decode.Contrast}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
-                            <CheckBox Content="Deinterlace" IsChecked="{Binding Configuration.Decode.Deinterlace}" Style="{StaticResource ConfigCheckBox}" />
+                            <CheckBox Content="Deinterlace" IsChecked="{Binding Configuration.Decode.Deinterlace}" IsEnabled="{Binding Configuration.Decode.HasDeinterlace}" Style="{StaticResource ConfigCheckBox}" />
                             <StackPanel><TextBlock Text="CROP LEFT (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Decode.CropLeft}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="CROP TOP (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Decode.CropTop}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="CROP RIGHT (PX)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Decode.CropRight}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
@@ -306,7 +306,7 @@
 
         <Grid Grid.Row="3" Margin="0,18,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <Button Grid.Column="1" Content="Save changes" IsEnabled="False" ToolTip="Saving configuration is not implemented yet." />
+            <Button x:Name="SaveButton" Grid.Column="1" Content="Save changes" Click="SaveButton_Click" />
             <Button Grid.Column="3" Content="Close" Style="{StaticResource PrimaryButton}" Click="CloseButton_Click" />
         </Grid>
     </Grid>

@@ -44,7 +44,7 @@
                 <WrapPanel>
                     <CheckBox Content="Output enabled" IsChecked="{Binding Enabled}" Style="{StaticResource ConfigCheckBox}" />
                     <CheckBox Content="Low latency" IsChecked="{Binding LowLatency}" Style="{StaticResource ConfigCheckBox}" />
-                    <CheckBox Content="Mirror" IsChecked="{Binding Mirror}" Style="{StaticResource ConfigCheckBox}" />
+                    <CheckBox Content="Mirror" IsChecked="{Binding Mirror}" IsEnabled="{Binding HasMirror}" Style="{StaticResource ConfigCheckBox}" />
                 </WrapPanel>
                 <UniformGrid Columns="3">
                     <StackPanel><TextBlock Text="OUTPUT TYPE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Types}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Type}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
@@ -96,8 +96,8 @@
         </StackPanel></ScrollViewer>
         <Grid Grid.Row="2" Margin="0,12,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <TextBlock Text="Controls are live UI previews only; no settings are sent to the device." Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Content="Save changes" IsEnabled="False" ToolTip="Saving configuration is not implemented yet." />
+            <TextBlock Text="Saving is available only for devices explicitly allowed to receive configuration changes." Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+            <Button x:Name="SaveButton" Grid.Column="1" Content="Save changes" Click="SaveButton_Click" />
         </Grid>
     </Grid>
 </UserControl>

@@ -4,5 +4,5 @@
         xmlns:local="clr-namespace:Linkpi_Monitor"
         Title="Stream configuration" Icon="App.ico" Width="1080" Height="820" MinWidth="900" MinHeight="650"
         Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip">
-    <local:ConfigurationEditor />
+    <local:ConfigurationEditor x:Name="Editor" />
 </Window>
