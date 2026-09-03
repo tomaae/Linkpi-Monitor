@@ -5,23 +5,12 @@ namespace Linkpi_Monitor;
 
 public partial class HardwareEditor : UserControl
 {
-    private bool _saveAllowed;
-
     public HardwareEditor()
     {
         InitializeComponent();
     }
 
     public Func<HardwareConfiguration, Task>? SaveAsync { get; set; }
-
-    public void SetSaveEnabled(bool enabled)
-    {
-        _saveAllowed = enabled;
-        SaveButton.IsEnabled = enabled;
-        SaveButton.ToolTip = enabled
-            ? "Save physical audio and video-output settings to the selected LinkPi."
-            : "Configuration changes are disabled for this device.";
-    }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
@@ -56,7 +45,7 @@ public partial class HardwareEditor : UserControl
         }
         finally
         {
-            SaveButton.IsEnabled = _saveAllowed;
+            SaveButton.IsEnabled = true;
         }
     }
 }

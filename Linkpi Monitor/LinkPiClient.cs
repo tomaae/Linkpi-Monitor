@@ -21,8 +21,6 @@ public sealed class LinkPiClient : IDisposable
     private bool _authenticated;
     private int _requestId;
 
-    public bool CanSaveChanges => _device.CanSaveChanges;
-
     public LinkPiClient(DeviceSettings device)
     {
         _device = device;
@@ -37,18 +35,8 @@ public sealed class LinkPiClient : IDisposable
         };
     }
 
-    private void EnsureWritesAllowed()
-    {
-        if (!_device.CanSaveChanges)
-        {
-            throw new InvalidOperationException(
-                $"Configuration changes are not allowed for '{_device.Name}'. Enable them in the local device editor first.");
-        }
-    }
-
     private async Task EnsureAuthenticatedAsync(CancellationToken cancellationToken)
     {
-        EnsureWritesAllowed();
         if (_authenticated)
         {
             return;
@@ -99,7 +87,6 @@ public sealed class LinkPiClient : IDisposable
         ChannelConfiguration configuration,
         CancellationToken cancellationToken = default)
     {
-        EnsureWritesAllowed();
         var root = await GetMutableDefaultConfigurationAsync(cancellationToken).ConfigureAwait(false);
         var channel = FindChannel(root, channelId);
 
@@ -159,7 +146,6 @@ public sealed class LinkPiClient : IDisposable
         PushConfiguration configuration,
         CancellationToken cancellationToken = default)
     {
-        EnsureWritesAllowed();
         await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
         var current = await GetJsonAsync("config/push.json", cancellationToken).ConfigureAwait(false);
         var root = JsonNode.Parse(current.GetRawText())?.AsObject()
@@ -203,7 +189,6 @@ public sealed class LinkPiClient : IDisposable
         HardwareConfiguration configuration,
         CancellationToken cancellationToken = default)
     {
-        EnsureWritesAllowed();
         var root = await GetMutableDefaultConfigurationAsync(cancellationToken).ConfigureAwait(false);
         var mix = root.OfType<JsonObject>().FirstOrDefault(channel =>
             string.Equals(channel["type"]?.ToString(), "mix", StringComparison.OrdinalIgnoreCase))
@@ -239,7 +224,6 @@ public sealed class LinkPiClient : IDisposable
 
     private async Task SaveDefaultConfigurationAsync(JsonArray root, CancellationToken cancellationToken)
     {
-        EnsureWritesAllowed();
         await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
         using var response = await _httpClient.PostAsJsonAsync(
             "link/relay.php",

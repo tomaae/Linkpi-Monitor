@@ -14,7 +14,7 @@ A Windows monitor and guarded configuration interface for LinkPi encoder devices
 - Inspect and locally experiment with complete source, Decode, Encode, Stream, Push and hardware configuration controls.
 - Detect and display the selected LinkPi model, then expose only the physical interfaces reported by that model.
 
-The configuration windows populate their controls from the selected device. Channel configuration includes an editable channel name, HDMI or USB-camera capture settings where applicable, separate main/sub video encoders and outputs, the shared audio encoder, network decode and picture transforms, protocol-specific settings, MPEG-TS, HLS and NDI. Push configuration includes global autorun and complete destination settings while keeping full publishing URLs out of the dashboard. The capability-aware Hardware tab covers USB audio input, analog audio-jack input/output, and physical HDMI display output when the selected model reports those interfaces. Save is enabled only for devices explicitly opted into configuration changes, asks for confirmation, and patches the device's current full document so unrecognized firmware-specific fields are preserved.
+The configuration windows populate their controls from the selected device. Channel configuration includes an editable channel name, HDMI or USB-camera capture settings where applicable, separate main/sub video encoders and outputs, the shared audio encoder, network decode and picture transforms, protocol-specific settings, MPEG-TS, HLS and NDI. Push configuration includes global autorun and complete destination settings while keeping full publishing URLs out of the dashboard. The capability-aware Hardware tab covers USB audio input, analog audio-jack input/output, and physical HDMI display output when the selected model reports those interfaces. Saves ask for confirmation and patch the device's current full document so unrecognized firmware-specific fields are preserved.
 
 Preview cards use the same `enc.snap` plus `snap/snap{id}.jpg` cycle as the device dashboard, but only once per configured monitor refresh rather than twice per second. Snapshot failures are isolated per channel. Monitoring never invokes an update/start/stop method. Configuration saves never expose network settings or invoke Push start/stop operations.
 
@@ -30,14 +30,13 @@ On first launch, the application creates `config.json` beside the executable whe
       "Name": "LinkPi studio",
       "BaseUrl": "http://10.0.1.6",
       "Username": "admin",
-      "Password": "replace-me",
-      "AllowChanges": false
+      "Password": "replace-me"
     }
   ]
 }
 ```
 
-Only the selected device is polled. Configuration writes require `AllowChanges: true`, which defaults to false and can be changed per device in the device editor. Existing legacy configuration using a single `LinkPi` object is still accepted.
+Only the selected device is polled. Existing legacy configuration using a single `LinkPi` object is still accepted.
 
 ## Run
 

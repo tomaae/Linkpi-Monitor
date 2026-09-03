@@ -385,7 +385,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 Hardware = snapshot.Hardware;
             }
-            HardwareConfigurationEditor.SetSaveEnabled(_client.CanSaveChanges);
             DeviceModelDisplay = string.IsNullOrWhiteSpace(snapshot.Hardware.Model)
                 ? DevicePicker.SelectedItem is DeviceSettings selectedDevice ? selectedDevice.Name : "Unknown LinkPi model"
                 : snapshot.Hardware.Model;

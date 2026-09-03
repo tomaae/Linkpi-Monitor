@@ -17,10 +17,6 @@ public partial class PushConfigWindow : Window
         _client = client;
         DataContext = configuration;
         DestinationTabs.SelectedItem = selectedDestination ?? configuration.Destinations.FirstOrDefault();
-        SaveButton.IsEnabled = client.CanSaveChanges;
-        SaveButton.ToolTip = client.CanSaveChanges
-            ? "Save all Push destination settings without starting or stopping Push."
-            : "Configuration changes are disabled for this device.";
     }
 
     private void AddDestinationButton_Click(object sender, RoutedEventArgs e)
@@ -73,7 +69,7 @@ public partial class PushConfigWindow : Window
         }
         finally
         {
-            SaveButton.IsEnabled = _client.CanSaveChanges;
+            SaveButton.IsEnabled = true;
         }
     }
 

@@ -96,8 +96,7 @@ public sealed class AppSettings
             Name = name,
             BaseUrl = baseUrl,
             Username = ReadString(element, "Username"),
-            Password = ReadString(element, "Password"),
-            AllowChanges = ReadBool(element, "AllowChanges")
+            Password = ReadString(element, "Password")
         };
     }
 
@@ -106,8 +105,6 @@ public sealed class AppSettings
             ? property.GetString() ?? string.Empty
             : string.Empty;
 
-    private static bool ReadBool(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.True;
 }
 
 public sealed record DeviceSettings
@@ -116,6 +113,4 @@ public sealed record DeviceSettings
     public required string BaseUrl { get; init; }
     public string Username { get; init; } = string.Empty;
     public string Password { get; init; } = string.Empty;
-    public bool AllowChanges { get; init; }
-    public bool CanSaveChanges => AllowChanges;
 }
