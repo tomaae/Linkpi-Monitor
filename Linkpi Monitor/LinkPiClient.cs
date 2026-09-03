@@ -39,7 +39,7 @@ public sealed class LinkPiClient : IDisposable
 
     private void EnsureWritesAllowed()
     {
-        if (_device.IsProtectedReadOnly || !_device.CanSaveChanges)
+        if (!_device.CanSaveChanges)
         {
             throw new InvalidOperationException(
                 $"Configuration changes are not allowed for '{_device.Name}'. Enable them in the local device editor first.");

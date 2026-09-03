@@ -21,8 +21,7 @@ public partial class DeviceEditorWindow : Window
         BaseUrlTextBox.Text = existingDevice.BaseUrl;
         UsernameTextBox.Text = existingDevice.Username;
         PasswordInput.Password = existingDevice.Password;
-        AllowChangesCheckBox.IsChecked = existingDevice.AllowChanges && !existingDevice.IsProtectedReadOnly;
-        AllowChangesCheckBox.IsEnabled = !existingDevice.IsProtectedReadOnly;
+        AllowChangesCheckBox.IsChecked = existingDevice.AllowChanges;
     }
 
     public DeviceSettings? Device { get; private set; }
@@ -40,14 +39,13 @@ public partial class DeviceEditorWindow : Window
         }
 
         var name = NameTextBox.Text.Trim();
-        var isProtectedHost = parsedUri.Host.Equals(DeviceSettings.ProtectedReadOnlyHost, StringComparison.OrdinalIgnoreCase);
         Device = new DeviceSettings
         {
             Name = string.IsNullOrWhiteSpace(name) ? parsedUri.Host : name,
             BaseUrl = baseUrl,
             Username = UsernameTextBox.Text.Trim(),
             Password = PasswordInput.Password,
-            AllowChanges = !isProtectedHost && AllowChangesCheckBox.IsChecked == true
+            AllowChanges = AllowChangesCheckBox.IsChecked == true
         };
         DialogResult = true;
     }

@@ -112,14 +112,10 @@ public sealed class AppSettings
 
 public sealed record DeviceSettings
 {
-    public const string ProtectedReadOnlyHost = "10.0.1.6";
-
     public required string Name { get; init; }
     public required string BaseUrl { get; init; }
     public string Username { get; init; } = string.Empty;
     public string Password { get; init; } = string.Empty;
     public bool AllowChanges { get; init; }
-    public bool IsProtectedReadOnly => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) &&
-        uri.Host.Equals(ProtectedReadOnlyHost, StringComparison.OrdinalIgnoreCase);
-    public bool CanSaveChanges => AllowChanges && !IsProtectedReadOnly;
+    public bool CanSaveChanges => AllowChanges;
 }

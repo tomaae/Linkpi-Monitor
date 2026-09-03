@@ -64,7 +64,7 @@
             <StackPanel>
                 <CheckBox x:Name="AllowChangesCheckBox" Content="Allow configuration changes on this device"
                           Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
-                <TextBlock Text="Keep this off for monitoring-only devices. 10.0.1.6 is additionally protected in code and cannot be unlocked here."
+                <TextBlock Text="Keep this off for monitoring-only devices. Enable it only when configuration writes are intended."
                            Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="22,5,0,0" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
