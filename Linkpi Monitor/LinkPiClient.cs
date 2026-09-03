@@ -188,6 +188,7 @@ public sealed class LinkPiClient : IDisposable
         var type = GetString(channel, "type");
         return !type.Equals("file", StringComparison.OrdinalIgnoreCase) &&
                !type.Equals("fine", StringComparison.OrdinalIgnoreCase) &&
+               !type.Equals("image", StringComparison.OrdinalIgnoreCase) &&
                !type.Equals("colorKey", StringComparison.OrdinalIgnoreCase);
     }
 
