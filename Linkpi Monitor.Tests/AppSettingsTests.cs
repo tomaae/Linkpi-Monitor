@@ -178,6 +178,20 @@ public sealed class AppSettingsTests
         Assert.Empty(Directory.GetFiles(temporary.Path));
     }
 
+    [Fact]
+    public async Task FailedAtomicReplaceRemovesTemporaryFile()
+    {
+        using var temporary = new TemporaryDirectory();
+        var occupiedPath = temporary.File("occupied");
+        Directory.CreateDirectory(occupiedPath);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            new AppSettings().SaveAsync(occupiedPath));
+
+        Assert.Empty(Directory.GetFiles(temporary.Path, "*.tmp"));
+        Assert.True(Directory.Exists(occupiedPath));
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         public TemporaryDirectory()

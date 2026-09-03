@@ -66,4 +66,48 @@ public sealed class ConfigurationModelTests
 
         Assert.Equal(expected, input.EnabledVisibility);
     }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    public void PhysicalInputFlagCombinesHdmiAndUsb(bool hdmi, bool usb, bool expected)
+    {
+        var input = new PhysicalInputConfiguration { IsHdmi = hdmi, IsUsbCamera = usb };
+
+        Assert.Equal(expected, input.IsPhysicalInput);
+    }
+
+    [Fact]
+    public void ConfigurationCatalogsExposeSupportedFirmwareValues()
+    {
+        var decode = new DecodeConfiguration();
+        var encoder = new EncoderConfiguration();
+        var audio = new AudioEncoderConfiguration();
+        var streamPush = new PushStreamConfiguration();
+        var destination = new PushDestinationConfiguration();
+        var transport = new TransportStreamConfiguration();
+        var audioInput = new AudioInputConfiguration();
+        var videoOutput = new VideoOutputConfiguration();
+
+        Assert.Equal(["0", "1", "2", "3"], decode.BufferModes.Select(option => option.Value));
+        Assert.Equal(["tcp", "udp"], decode.Protocols.Select(option => option.Value));
+        Assert.Contains(encoder.VideoFormats, option => option.Value == "h265,main");
+        Assert.Contains(encoder.RateControls, option => option.Value == "fixqp");
+        Assert.Contains(encoder.TimestampModes, option => option.Value == "true,sinsam");
+        Assert.Contains(audio.Codecs, option => option.Value == "opus");
+        Assert.Contains(audio.Gains, option => option.Value == "-24");
+        Assert.Contains(audio.SampleRates, option => option.Value == "44100");
+        Assert.Equal(["1", "2"], audio.ChannelModes.Select(option => option.Value));
+        Assert.Contains("rtp_mpegts", streamPush.Formats);
+        Assert.Contains(streamPush.CompatibilityModes, option => option.Value == "ext_header");
+        Assert.Equal(["main", "sub"], destination.Streams.Select(option => option.Value));
+        Assert.Contains(destination.CompatibilityModes, option => option.Value == "ext_header");
+        Assert.Contains("1316", transport.PacketSizes);
+        Assert.Equal(16, audioInput.NoiseReductionLevels.Count);
+        Assert.Contains(audioInput.NoiseReductionModes, option => option.Value == "1");
+        Assert.Contains(videoOutput.Types, option => option.Value == "dvi");
+        Assert.Contains(videoOutput.ColorMatrices, option => option.Value == "709_601");
+    }
 }
