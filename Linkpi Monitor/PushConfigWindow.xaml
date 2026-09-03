@@ -1,0 +1,88 @@
+<Window x:Class="Linkpi_Monitor.PushConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Push configuration" Icon="App.ico" Width="980" Height="720" MinWidth="820" MinHeight="580"
+        Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip">
+    <Window.Resources>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,5" />
+        </Style>
+        <Style x:Key="ConfigTextBox" TargetType="TextBox">
+            <Setter Property="Padding" Value="9,7" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="MinHeight" Value="35" />
+        </Style>
+        <Style x:Key="ConfigComboBox" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="MinHeight" Value="35" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="Push configuration" FontSize="27" FontWeight="SemiBold" />
+            <TextBlock Text="Inspect and arrange publishing targets. Changes remain local until saving is implemented."
+                       Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
+        </StackPanel>
+
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="18" Margin="0,18,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Automatic publishing" FontSize="17" FontWeight="SemiBold" />
+                    <TextBlock Text="Start enabled destinations when the LinkPi starts." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,0" />
+                </StackPanel>
+                <CheckBox Grid.Column="1" Content="Autorun" IsChecked="{Binding Autorun}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="18,0,0,0" />
+            </Grid>
+        </Border>
+
+        <TabControl x:Name="DestinationTabs" Grid.Row="2" ItemsSource="{Binding Destinations}">
+            <TabControl.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
+            </TabControl.ItemTemplate>
+            <TabControl.ContentTemplate>
+                <DataTemplate>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <Border Style="{StaticResource CardStyle}" Padding="18" Margin="0,4,0,10">
+                            <StackPanel>
+                                <WrapPanel Margin="0,0,0,8">
+                                    <CheckBox Content="Destination enabled" IsChecked="{Binding Enabled}" Foreground="{StaticResource TextBrush}" Margin="0,7,20,10" />
+                                </WrapPanel>
+                                <UniformGrid Columns="2">
+                                    <StackPanel><TextBlock Text="DESTINATION NAME" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                                    <StackPanel><TextBlock Text="TYPE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Types}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Type}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                    <StackPanel><TextBlock Text="VIDEO SOURCE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding VideoSources}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding VideoSource}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                    <StackPanel><TextBlock Text="AUDIO SOURCE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding AudioSources}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding AudioSource}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                    <StackPanel><TextBlock Text="ENCODER STREAM" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Streams}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Stream}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                    <StackPanel><TextBlock Text="FLV / RTMP COMPATIBILITY" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding CompatibilityModes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Compatibility}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                                </UniformGrid>
+                                <TextBlock Text="DESTINATION URL" Style="{StaticResource FieldLabel}" />
+                                <TextBox Text="{Binding Url}" Style="{StaticResource ConfigTextBox}" />
+                                <TextBlock Text="The full URL is shown only in this configuration window; the dashboard continues to hide keys and paths."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+                </DataTemplate>
+            </TabControl.ContentTemplate>
+        </TabControl>
+
+        <Grid Grid.Row="3" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Add destination" Click="AddDestinationButton_Click" />
+            <Button Grid.Column="2" Content="Remove destination" Click="RemoveDestinationButton_Click" />
+            <Button Grid.Column="4" Content="Save changes" IsEnabled="False" ToolTip="Saving configuration is not implemented yet." />
+            <Button Grid.Column="6" Content="Close" Style="{StaticResource PrimaryButton}" Click="CloseButton_Click" />
+        </Grid>
+    </Grid>
+</Window>

@@ -37,6 +37,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _memoryDisplay = "—";
     private string _temperatureDisplay = "—";
     private string _errorMessage = string.Empty;
+    private PushConfiguration? _pushConfiguration;
 
     public MainWindow()
     {
@@ -48,6 +49,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<DeviceSettings> Devices { get; } = [];
     public ObservableCollection<ChannelDisplay> Channels { get; } = [];
     public ObservableCollection<PushDisplay> PushDestinations { get; } = [];
+    public bool HasPushConfiguration => _pushConfiguration is not null;
 
     public string ConnectionStatus
     {
@@ -154,6 +156,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _client = new LinkPiClient(device);
         Channels.Clear();
         PushDestinations.Clear();
+        SetPushConfiguration(null);
         ConnectionStatus = "Connecting";
         ConnectionBrush = BusyBrush;
         ErrorMessage = string.Empty;
@@ -318,6 +321,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _client = null;
         Channels.Clear();
         PushDestinations.Clear();
+        SetPushConfiguration(null);
         CpuDisplay = "—";
         MemoryDisplay = "—";
         TemperatureDisplay = "—";
@@ -348,6 +352,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             Replace(Channels, snapshot.Channels);
             Replace(PushDestinations, snapshot.PushDestinations);
+            SetPushConfiguration(snapshot.PushConfiguration);
             CpuDisplay = $"{snapshot.CpuPercent}%";
             MemoryDisplay = $"{snapshot.MemoryPercent}%";
             TemperatureDisplay = $"{snapshot.TemperatureCelsius} °C";
@@ -401,6 +406,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             new StreamConfigWindow(channel) { Owner = this }.ShowDialog();
         }
+    }
+
+    private void PushConfigurationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pushConfiguration is not null)
+        {
+            new PushConfigWindow(_pushConfiguration) { Owner = this }.ShowDialog();
+        }
+    }
+
+    private void PushDestinationConfigurationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pushConfiguration is not null && sender is Button { Tag: PushDisplay push })
+        {
+            new PushConfigWindow(_pushConfiguration, push.Configuration) { Owner = this }.ShowDialog();
+        }
+    }
+
+    private void SetPushConfiguration(PushConfiguration? configuration)
+    {
+        _pushConfiguration = configuration;
+        OnPropertyChanged(nameof(HasPushConfiguration));
     }
 
     private void Window_Closed(object? sender, EventArgs e)

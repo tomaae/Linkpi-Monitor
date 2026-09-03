@@ -175,14 +175,11 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Text="Push destinations" FontSize="25" FontWeight="SemiBold" />
-                                    <TextBlock Text="Configured publishing targets and their current transfer state. Publishing paths are deliberately hidden."
+                                    <TextBlock Text="Configured publishing targets and their current transfer state. Full paths are available under Configuration."
                                                Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Content="Add destination" IsEnabled="False" Margin="0,0,8,0" ToolTip="Push editing is not implemented yet." />
-                                    <Button Content="Start all" IsEnabled="False" Margin="0,0,8,0" ToolTip="Push control is not implemented yet." />
-                                    <Button Content="Stop all" IsEnabled="False" ToolTip="Push control is not implemented yet." />
-                                </StackPanel>
+                                <Button Grid.Column="1" Content="Configuration" VerticalAlignment="Center" Click="PushConfigurationButton_Click"
+                                        IsEnabled="{Binding HasPushConfiguration}" ToolTip="Inspect all publishing settings. Saving remains disabled." />
                             </Grid>
                             <ItemsControl ItemsSource="{Binding PushDestinations}">
                                 <ItemsControl.ItemTemplate>
@@ -203,10 +200,8 @@
                                                     <TextBlock Text="{Binding Speed}" Margin="0,4,0,0" /></StackPanel>
                                                 <StackPanel Grid.Column="4"><TextBlock Text="DURATION" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
                                                     <TextBlock Text="{Binding Duration}" Margin="0,4,0,0" /></StackPanel>
-                                                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Content="Edit" IsEnabled="False" Margin="0,0,8,0" ToolTip="Push editing is not implemented yet." />
-                                                    <Button Content="Start / Stop" IsEnabled="False" ToolTip="Push control is not implemented yet." />
-                                                </StackPanel>
+                                                <Button Grid.Column="5" Content="Configuration" Tag="{Binding}" Click="PushDestinationConfigurationButton_Click"
+                                                        VerticalAlignment="Center" ToolTip="Inspect this publishing destination. Saving remains disabled." />
                                             </Grid>
                                         </Border>
                                     </DataTemplate>

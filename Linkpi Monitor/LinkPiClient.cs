@@ -42,9 +42,13 @@ public sealed class LinkPiClient : IDisposable
             .ConfigureAwait(false);
 
         var system = await systemTask;
-        var channels = ParseChannels(await configTask, await inputTask, await epgTask, await hardwareTask);
+        var rawConfig = await configTask;
+        var rawPushConfig = await pushConfigTask;
+        var rawHardware = await hardwareTask;
+        var channels = ParseChannels(rawConfig, await inputTask, await epgTask, rawHardware);
         await LoadPreviewImagesAsync(channels, cancellationToken).ConfigureAwait(false);
         var pushState = await pushStateTask;
+        var pushConfiguration = ParsePushConfiguration(rawPushConfig, channels, rawHardware);
 
         return new LinkPiSnapshot
         {
@@ -52,7 +56,8 @@ public sealed class LinkPiClient : IDisposable
             MemoryPercent = GetInt(system, "mem"),
             TemperatureCelsius = GetInt(system, "temperature"),
             Channels = channels,
-            PushDestinations = ParsePushDestinations(await pushConfigTask, pushState, channels),
+            PushDestinations = ParsePushDestinations(pushConfiguration, pushState, channels),
+            PushConfiguration = pushConfiguration,
             IsPushing = GetBool(pushState, "pushing")
         };
     }
@@ -572,16 +577,67 @@ public sealed class LinkPiClient : IDisposable
             GetBool(GetObject(channel, "net"), "decodeV");
     }
 
-    private IReadOnlyList<PushDisplay> ParsePushDestinations(
+    private static PushConfiguration ParsePushConfiguration(
         JsonElement pushConfig,
+        IReadOnlyList<ChannelDisplay> channels,
+        JsonElement hardware)
+    {
+        var videoSources = channels.Select(channel => new SelectionOption(
+            channel.Id.ToString(CultureInfo.InvariantCulture), channel.Name)).ToArray();
+        var audioSources = new List<SelectionOption> { new("close", "Disabled") };
+        audioSources.AddRange(videoSources);
+        var types = new List<SelectionOption>
+        {
+            new("normal", "Normal push"),
+            new("webrtc", "WebRTC")
+        };
+        if (GetString(hardware, "chip").Equals("SS524V100", StringComparison.OrdinalIgnoreCase))
+        {
+            types.Add(new SelectionOption("trtc", "TRTC"));
+        }
+
+        var configuration = new PushConfiguration
+        {
+            Autorun = GetBool(pushConfig, "autorun"),
+            VideoSources = videoSources,
+            AudioSources = audioSources,
+            Types = types
+        };
+
+        if (!pushConfig.TryGetProperty("url", out var destinations) || destinations.ValueKind != JsonValueKind.Array)
+        {
+            return configuration;
+        }
+
+        foreach (var destination in destinations.EnumerateArray())
+        {
+            var videoSource = GetString(destination, "srcV");
+            var audioSource = GetString(destination, "srcA", "close");
+            var type = GetString(destination, "type", "normal");
+            configuration.Destinations.Add(new PushDestinationConfiguration
+            {
+                Name = GetString(destination, "des", $"Push {configuration.Destinations.Count + 1}"),
+                Type = type,
+                Types = EnsureOption(types, type, type),
+                VideoSource = videoSource,
+                VideoSources = EnsureOption(videoSources, videoSource, $"Channel {videoSource}"),
+                AudioSource = audioSource,
+                AudioSources = EnsureOption(audioSources, audioSource, $"Source {audioSource}"),
+                Stream = GetString(destination, "stream", "main"),
+                Url = GetString(destination, "path"),
+                Compatibility = GetString(destination, "flvflags"),
+                Enabled = GetBool(destination, "enable")
+            });
+        }
+
+        return configuration;
+    }
+
+    private IReadOnlyList<PushDisplay> ParsePushDestinations(
+        PushConfiguration pushConfiguration,
         JsonElement pushState,
         IReadOnlyList<ChannelDisplay> channels)
     {
-        if (!pushConfig.TryGetProperty("url", out var destinations) || destinations.ValueKind != JsonValueKind.Array)
-        {
-            return [];
-        }
-
         var runtimeStatuses = pushState.TryGetProperty("status", out var statuses) && statuses.ValueKind == JsonValueKind.Array
             ? statuses.EnumerateArray().ToArray()
             : [];
@@ -589,26 +645,29 @@ public sealed class LinkPiClient : IDisposable
         var results = new List<PushDisplay>();
         var index = 0;
 
-        foreach (var destination in destinations.EnumerateArray())
+        foreach (var destination in pushConfiguration.Destinations)
         {
             var runtime = index < runtimeStatuses.Length ? runtimeStatuses[index] : default;
-            var enabled = GetBool(destination, "enable");
+            var enabled = destination.Enabled;
             var speed = GetInt(runtime, "speed");
             var isStreaming = enabled && globallyPushing && speed > 0;
-            var sourceId = GetInt(destination, "srcV", -1);
+            var sourceId = int.TryParse(destination.VideoSource, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSource)
+                ? parsedSource
+                : -1;
             var sourceName = channels.FirstOrDefault(channel => channel.Id == sourceId)?.Name ?? $"Channel {sourceId}";
 
             results.Add(new PushDisplay
             {
                 Index = index,
-                Name = GetString(destination, "des", $"Push {index + 1}"),
-                Type = GetString(destination, "type", "normal"),
+                Name = destination.Name,
+                Type = destination.Type,
                 Source = sourceName,
-                Destination = SanitizeDestination(GetString(destination, "path")),
+                Destination = SanitizeDestination(destination.Url),
                 Status = !enabled ? "Disabled" : isStreaming ? "Streaming" : "Waiting",
                 Speed = speed > 0 ? $"{speed / 1000d:0.0} Mbps" : "—",
                 Duration = FormatDuration(GetLong(runtime, "duration")),
-                StatusBrush = !enabled ? OfflineBrush : isStreaming ? OnlineBrush : WarningBrush
+                StatusBrush = !enabled ? OfflineBrush : isStreaming ? OnlineBrush : WarningBrush,
+                Configuration = destination
             });
             index++;
         }

@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using System.Collections.ObjectModel;
 
 namespace Linkpi_Monitor;
 
@@ -9,6 +10,7 @@ public sealed class LinkPiSnapshot
     public int TemperatureCelsius { get; init; }
     public required IReadOnlyList<ChannelDisplay> Channels { get; init; }
     public required IReadOnlyList<PushDisplay> PushDestinations { get; init; }
+    public required PushConfiguration PushConfiguration { get; init; }
     public bool IsPushing { get; init; }
 }
 
@@ -48,4 +50,54 @@ public sealed class PushDisplay
     public required string Speed { get; init; }
     public required string Duration { get; init; }
     public required Brush StatusBrush { get; init; }
+    public required PushDestinationConfiguration Configuration { get; init; }
+}
+
+public sealed class PushConfiguration : ConfigurationSection
+{
+    private bool _autorun;
+
+    public bool Autorun
+    {
+        get => _autorun;
+        set => SetField(ref _autorun, value);
+    }
+
+    public ObservableCollection<PushDestinationConfiguration> Destinations { get; init; } = [];
+    public IReadOnlyList<SelectionOption> VideoSources { get; init; } = [];
+    public IReadOnlyList<SelectionOption> AudioSources { get; init; } = [];
+    public IReadOnlyList<SelectionOption> Types { get; init; } = [];
+}
+
+public sealed class PushDestinationConfiguration : ConfigurationSection
+{
+    private string _name = string.Empty;
+
+    public string Name
+    {
+        get => _name;
+        set => SetField(ref _name, value);
+    }
+
+    public string Type { get; set; } = "normal";
+    public string VideoSource { get; set; } = string.Empty;
+    public string AudioSource { get; set; } = "close";
+    public string Stream { get; set; } = "main";
+    public string Url { get; set; } = string.Empty;
+    public string Compatibility { get; set; } = string.Empty;
+    public bool Enabled { get; set; }
+
+    public IReadOnlyList<SelectionOption> VideoSources { get; init; } = [];
+    public IReadOnlyList<SelectionOption> AudioSources { get; init; } = [];
+    public IReadOnlyList<SelectionOption> Types { get; init; } = [];
+    public IReadOnlyList<SelectionOption> Streams { get; } =
+    [
+        new("main", "Main stream"),
+        new("sub", "Sub stream")
+    ];
+    public IReadOnlyList<SelectionOption> CompatibilityModes { get; } =
+    [
+        new(string.Empty, "Normal"),
+        new("ext_header", "Enhanced RTMP")
+    ];
 }
