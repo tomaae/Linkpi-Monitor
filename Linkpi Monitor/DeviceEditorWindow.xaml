@@ -1,7 +1,7 @@
 <Window x:Class="Linkpi_Monitor.DeviceEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Device" Icon="App.ico" Width="520" Height="470" MinWidth="520" MinHeight="470"
+        Title="Device" Icon="App.ico" Width="520" Height="535" MinWidth="520" MinHeight="535"
         Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False">
     <Window.Resources>
@@ -28,6 +28,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -59,12 +60,21 @@
             </StackPanel>
         </Grid>
 
-        <Border Grid.Row="4" x:Name="ValidationBorder" Background="#3A1F24" BorderBrush="#84404C"
+        <Border Grid.Row="4" Style="{StaticResource CardStyle}" Padding="12" Margin="0,0,0,14">
+            <StackPanel>
+                <CheckBox x:Name="AllowChangesCheckBox" Content="Allow configuration changes on this device"
+                          Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
+                <TextBlock Text="Keep this off for monitoring-only devices. 10.0.1.6 is additionally protected in code and cannot be unlocked here."
+                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="22,5,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="5" x:Name="ValidationBorder" Background="#3A1F24" BorderBrush="#84404C"
                 BorderThickness="1" CornerRadius="6" Padding="10" Visibility="Collapsed">
             <TextBlock x:Name="ValidationText" Foreground="#FFB4BE" TextWrapping="Wrap" />
         </Border>
 
-        <Grid Grid.Row="6" Margin="0,20,0,0">
+        <Grid Grid.Row="7" Margin="0,20,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <Button Grid.Column="1" Content="Cancel" IsCancel="True" />
             <Button Grid.Column="3" Content="Save device" Style="{StaticResource PrimaryButton}"

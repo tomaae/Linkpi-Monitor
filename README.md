@@ -30,13 +30,14 @@ On first launch, the application creates `config.json` beside the executable whe
       "Name": "LinkPi studio",
       "BaseUrl": "http://10.0.1.6",
       "Username": "admin",
-      "Password": "replace-me"
+      "Password": "replace-me",
+      "AllowChanges": false
     }
   ]
 }
 ```
 
-Only the selected device is polled. Existing legacy configuration using a single `LinkPi` object is still accepted.
+Only the selected device is polled. Configuration writes require `AllowChanges: true`, which defaults to false. The currently protected production device at `10.0.1.6` is also denied by code regardless of this setting. Existing legacy configuration using a single `LinkPi` object is still accepted.
 
 ## Run
 

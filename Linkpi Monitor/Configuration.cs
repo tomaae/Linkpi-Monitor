@@ -96,7 +96,8 @@ public sealed class AppSettings
             Name = name,
             BaseUrl = baseUrl,
             Username = ReadString(element, "Username"),
-            Password = ReadString(element, "Password")
+            Password = ReadString(element, "Password"),
+            AllowChanges = ReadBool(element, "AllowChanges")
         };
     }
 
@@ -104,12 +105,21 @@ public sealed class AppSettings
         element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString() ?? string.Empty
             : string.Empty;
+
+    private static bool ReadBool(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.True;
 }
 
 public sealed record DeviceSettings
 {
+    public const string ProtectedReadOnlyHost = "10.0.1.6";
+
     public required string Name { get; init; }
     public required string BaseUrl { get; init; }
     public string Username { get; init; } = string.Empty;
     public string Password { get; init; } = string.Empty;
+    public bool AllowChanges { get; init; }
+    public bool IsProtectedReadOnly => Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) &&
+        uri.Host.Equals(ProtectedReadOnlyHost, StringComparison.OrdinalIgnoreCase);
+    public bool CanSaveChanges => AllowChanges && !IsProtectedReadOnly;
 }
