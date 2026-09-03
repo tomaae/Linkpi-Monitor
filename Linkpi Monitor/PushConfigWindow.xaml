@@ -47,9 +47,11 @@
         </Border>
 
         <TabControl x:Name="DestinationTabs" Grid.Row="2" ItemsSource="{Binding Destinations}">
-            <TabControl.ItemTemplate>
-                <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
-            </TabControl.ItemTemplate>
+            <TabControl.ItemContainerStyle>
+                <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                    <Setter Property="Header" Value="{Binding Name}" />
+                </Style>
+            </TabControl.ItemContainerStyle>
             <TabControl.ContentTemplate>
                 <DataTemplate>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">

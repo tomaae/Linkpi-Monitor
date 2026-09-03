@@ -51,7 +51,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public ObservableCollection<DeviceSettings> Devices { get; } = [];
     public ObservableCollection<ChannelDisplay> Channels { get; } = [];
     public ObservableCollection<PushDisplay> PushDestinations { get; } = [];
-    public bool HasPushConfiguration => _pushConfiguration is not null;
     public HardwareConfiguration? Hardware
     {
         get => _hardware;
@@ -439,14 +438,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void PushConfigurationButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_pushConfiguration is not null)
-        {
-            new PushConfigWindow(_pushConfiguration) { Owner = this }.ShowDialog();
-        }
-    }
-
     private void PushDestinationConfigurationButton_Click(object sender, RoutedEventArgs e)
     {
         if (_pushConfiguration is not null && sender is Button { Tag: PushDisplay push })
@@ -458,7 +449,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void SetPushConfiguration(PushConfiguration? configuration)
     {
         _pushConfiguration = configuration;
-        OnPropertyChanged(nameof(HasPushConfiguration));
     }
 
     private void Window_Closed(object? sender, EventArgs e)
