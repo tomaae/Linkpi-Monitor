@@ -1,6 +1,14 @@
 # LinkPi Monitor
+[![Latest release](https://img.shields.io/github/v/release/tomaae/Linkpi-Monitor?style=flat-square)](https://github.com/tomaae/Linkpi-Monitor/releases/latest)
+![Project stage](https://img.shields.io/badge/release-1.0-green.svg?style=flat-square)
+![Total downloads](https://img.shields.io/github/downloads/tomaae/Linkpi-Monitor/total?style=flat-square)
+[![Build](https://img.shields.io/github/actions/workflow/status/tomaae/Linkpi-Monitor/build.yml?branch=main&style=flat-square&label=tests)](https://github.com/tomaae/Linkpi-Monitor/actions/workflows/build.yml)
+![Commits since release](https://img.shields.io/github/commits-since/tomaae/Linkpi-Monitor/latest?style=flat-square)
 
 LinkPi Monitor is a native Windows desktop application for monitoring and configuring LinkPi video encoder/decoder appliances. It combines source health, previews, stream configuration, publishing status, hardware controls, and an embedded live player in one interface.
+
+> [!CAUTION]
+> **This project was fully created by AI.** Selected behavior has been tested by the project owner, but the code has not received a comprehensive independent human audit.
 
 Built with C# 14, .NET 10 WPF, and LibVLCSharp.
 
