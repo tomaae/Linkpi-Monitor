@@ -1,50 +1,106 @@
 # LinkPi Monitor
 
-A Windows monitor and guarded configuration interface for LinkPi encoder devices, built with C# and .NET 10 WPF.
+LinkPi Monitor is a native Windows desktop application for monitoring and configuring LinkPi video encoder/decoder appliances. It combines source health, previews, stream configuration, publishing status, hardware controls, and an embedded live player in one interface.
 
-## Current features
+Built with C# 14, .NET 10 WPF, and LibVLCSharp.
 
-- Select one of multiple configured LinkPi devices.
-- Poll CPU, memory, temperature, channel configuration, physical-input state and push state.
-- Present decode, encode and stream output details together for every channel.
-- Keep HDMI, USB camera and Mix channels visible alongside network decoders while hiding internal file and color-key channels.
-- Show a current dashboard snapshot for every enabled, decodable channel.
-- Watch an advertised RTSP stream directly inside LinkPi Monitor.
-- Show publishing status and bitrate without exposing stream keys.
-- Inspect and locally experiment with complete source, Decode, Encode, Stream, Push and hardware configuration controls.
-- Detect and display the selected LinkPi model, then expose only the physical interfaces reported by that model.
+![Sources and streams dashboard](docs/screenshots/sources-and-streams.png)
 
-The configuration windows populate their controls from the selected device. Channel configuration includes an editable channel name, HDMI or USB-camera capture settings where applicable, separate main/sub video encoders and outputs, the shared audio encoder, network decode and picture transforms, protocol-specific settings, MPEG-TS, HLS and NDI. Push configuration includes global autorun and complete destination settings while keeping full publishing URLs out of the dashboard. The capability-aware Hardware tab covers USB audio input, analog audio-jack input/output, and physical HDMI display output when the selected model reports those interfaces. Saves ask for confirmation and patch the device's current full document so unrecognized firmware-specific fields are preserved.
+> [!NOTE]
+> The dashboard and Watch screenshots keep the real channel names and camera images. Device usernames, passwords, stream keys, and API keys are not shown; the remaining screenshots use representative configuration values.
 
-Preview cards use the same `enc.snap` plus `snap/snap{id}.jpg` cycle as the device dashboard, but only once per configured monitor refresh rather than twice per second. Snapshot failures are isolated per channel. Monitoring never invokes an update/start/stop method. Configuration saves never expose network settings or invoke Push start/stop operations.
+## Features
+
+- Manage multiple LinkPi devices and switch between them without restarting the application.
+- Display the detected model, CPU use, memory use, temperature, and connection state.
+- Discover channel layouts dynamically instead of assuming a fixed four-channel device.
+- Present HDMI, USB camera, network decoder, and Mix channels in one dashboard.
+- Hide internal File, ColorKey, and Image channels.
+- Generate a preview for each active, decodable channel.
+- Size previews and the embedded player from the source dimensions, rotation, and crop settings.
+- Play advertised RTSP streams inside the application with mute support.
+- Configure decode, input, encode, audio, streaming, transport, HLS, NDI, and Push settings.
+- Display physical audio input/output and HDMI output controls only when the device reports those capabilities.
+- Preserve unknown firmware-specific JSON properties when saving supported settings.
+
+## Interface
+
+### Watch
+
+Watch opens the selected channel's advertised RTSP stream inside LinkPi Monitor. The player follows the effective source proportions after crop and rotation, and includes a local mute control.
+
+![Embedded Watch window showing Linkpi1 HDMI](docs/screenshots/watch-window.png)
+
+### Channel configuration
+
+Each channel has one configuration window. Relevant tabs are selected from the channel type: physical inputs expose Input, network sources expose Decode, and every usable source exposes Encode and Stream.
+
+![Channel encoder configuration](docs/screenshots/channel-configuration.png)
+
+Configuration includes:
+
+- Channel name and enabled state
+- HDMI rotation, crop, contrast, deinterlace, and NTSC compatibility
+- USB camera capture size and frame rate
+- Network source URL, input frame rate, transport, buffering, decode state, rotation, crop, and contrast
+- Main and sub encoder size, codec/profile, rate control, bitrate, frame rate, GOP, latency, QP, and timestamp options
+- Shared audio codec, source, gain, sample rate, channels, and bitrate
+- Main and sub HTTP, HLS, RTMP, RTSP, SRT, UDP, RIST, WebRTC, and direct-push output settings
+- MPEG-TS, HLS segmentation, and NDI settings
+
+Saving asks for confirmation, fetches the latest full configuration from the device, patches the supported fields, and sends the complete document back. This avoids discarding settings introduced by a different firmware version.
+
+### Push destinations
+
+The Push dashboard shows destination state, source, current rate, and session duration without displaying publishing paths or stream keys.
+
+![Push destination status](docs/screenshots/push-destinations.png)
+
+The configuration window supports adding, editing, and removing destinations. Saving Push configuration does not start or stop publishing. LinkPi Monitor does not expose the device network configuration.
+
+### Hardware
+
+The Hardware tab is capability-driven. Depending on the selected model, it can expose USB audio input, analog audio-jack input/output, HDMI output routing, format, rotation, latency, and color controls.
+
+![Hardware configuration](docs/screenshots/hardware.png)
+
+## Requirements
+
+- Windows 10 or later, x64
+- .NET 10 SDK for development, or the .NET 10 Desktop Runtime for the published framework-dependent build
+- Network access to a supported LinkPi appliance over HTTP or HTTPS
+- Valid device login credentials for configuration saves
+
+The published package includes the required x64 LibVLC runtime. VLC does not need to be installed separately.
 
 ## Configuration
 
-On first launch, the application creates `config.json` beside the executable when the file does not already exist. Use the Add device, Edit and Delete buttons in the header to manage connections. Changes are saved locally to this file; an empty device list is supported. The real file is excluded from Git because it can contain credentials.
+On first launch, the application creates `config.json` beside the executable. Use **Add device**, **Edit**, and **Delete** in the header to manage the same file from the UI.
 
 ```json
 {
   "RefreshIntervalSeconds": 5,
   "Devices": [
     {
-      "Name": "LinkPi studio",
-      "BaseUrl": "http://10.0.1.6",
-      "Username": "admin",
-      "Password": "replace-me"
+      "Name": "Studio LinkPi",
+      "BaseUrl": "http://192.0.2.10",
+      "Username": "your-username",
+      "Password": "your-password"
     }
   ]
 }
 ```
 
-Only the selected device is polled. Existing legacy configuration using a single `LinkPi` object is still accepted.
+`RefreshIntervalSeconds` is clamped to 2–300 seconds. Only the selected device is polled. An empty device list is valid, and the legacy single-`LinkPi` configuration shape remains supported.
 
-## Run
+> [!IMPORTANT]
+> `config.json` stores credentials as plain local JSON. It is excluded from Git and from release packages. Keep the application directory accessible only to trusted users and never commit the real file.
+
+## Run from source
 
 ```powershell
 dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 ```
-
-The Watch button opens the live feed in a dedicated embedded player window. The required LibVLC runtime is included in published packages; a separately installed media player is not required.
 
 ## Tests
 
@@ -52,7 +108,7 @@ The Watch button opens the live feed in a dedicated embedded player window. The 
 dotnet test '.\Linkpi Monitor.slnx'
 ```
 
-The save-transport tests use an in-memory HTTP handler and never contact a LinkPi device. They verify channel, Push and hardware payloads, preservation of unrecognized firmware fields and JSON value types, and that saving Push configuration does not invoke Push start or stop methods.
+The automated save-transport tests use an in-memory HTTP handler and never contact a LinkPi device. They cover channel, Push, and hardware payloads; preservation of unrecognized firmware fields and JSON value types; dynamic Mix-channel discovery; and the guarantee that saving Push configuration does not invoke Push start or stop methods.
 
 ## Create a release package
 
@@ -62,11 +118,44 @@ From the repository root:
 .\Publish.ps1
 ```
 
-The script restores the solution, runs the Release checks, publishes a framework-dependent Windows x64 single-file executable, audits the exact package contents, and creates:
+For a non-interactive run:
+
+```powershell
+.\Publish.ps1 -NoPause
+```
+
+The script restores the solution, runs Release tests, publishes a framework-dependent Windows x64 single-file executable, audits the package contents, and creates:
 
 ```text
 artifacts/LinkpiMonitor/
 artifacts/LinkpiMonitor-win-x64.zip
 ```
 
-The release never contains the credential-bearing `config.json`; the application creates it on first launch. Run the package from a folder where your account can create and update files. An interactive script waits for Enter before closing; automated callers can use `.\Publish.ps1 -NoPause`.
+The release package includes `LICENSE`, `THIRD-PARTY-NOTICES.txt`, and the required LibVLC binaries. It never includes `config.json`.
+
+## Device API behavior
+
+LinkPi firmware exposes a mixture of JSON configuration documents, JSON-RPC methods, and authenticated relay calls. LinkPi Monitor currently uses:
+
+- Channel and hardware configuration documents for discovery and supported updates
+- Hardware capability metadata for model-specific controls
+- System, input, EPG, snapshot, and Push-state calls for monitoring
+- The authenticated default-configuration update relay for channel and hardware saves
+- `push.update` for Push configuration saves
+
+Monitoring does not invoke update, start, or stop operations. Snapshot failures are isolated per channel so one unavailable source does not fail the entire refresh.
+
+Firmware schemas differ between devices. The application preserves properties it does not understand, retains firmware-specific string/number representations where required, and omits optional fields that the active firmware does not provide. Even so, configuration changes should be tested carefully after adding support for a new model or firmware family.
+
+## Project layout
+
+```text
+Linkpi Monitor/          WPF application
+Linkpi Monitor.Tests/    Isolated save-transport tests
+docs/screenshots/        Sanitized README images
+Publish.ps1              Audited Windows x64 packaging script
+```
+
+## License
+
+LinkPi Monitor is licensed under the [Apache License 2.0](LICENSE). LibVLCSharp and LibVLC remain under their respective licenses; see [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
