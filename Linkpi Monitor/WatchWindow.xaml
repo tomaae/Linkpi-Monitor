@@ -31,7 +31,21 @@
         </Border>
 
         <Border x:Name="VideoHost" Grid.Row="1" Background="Black" SizeChanged="VideoHost_SizeChanged">
-            <vlc:VideoView x:Name="VideoView" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <vlc:VideoView x:Name="VideoView" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid Background="Transparent" ContextMenuOpening="VideoOverlay_ContextMenuOpening">
+                    <Grid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem x:Name="CopyImageMenuItem" Header="Copy image" Click="CopyImageMenuItem_Click" />
+                            <MenuItem x:Name="SaveImageMenuItem" Header="Save image as…" Click="SaveImageMenuItem_Click" />
+                        </ContextMenu>
+                    </Grid.ContextMenu>
+                    <Border x:Name="SnapshotConfirmation" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Margin="18" Padding="12,7" CornerRadius="4" Background="#DD121920"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Visibility="Collapsed">
+                        <TextBlock x:Name="SnapshotConfirmationText" Foreground="White" FontSize="12" />
+                    </Border>
+                </Grid>
+            </vlc:VideoView>
         </Border>
     </Grid>
 </Window>

@@ -35,7 +35,7 @@ Built with C# 14, .NET 10 WPF, and LibVLCSharp.
 
 ### Watch
 
-Watch opens the selected channel's advertised RTSP stream inside LinkPi Monitor. The player follows the effective source proportions after crop and rotation, and includes a local mute control.
+Watch opens the selected channel's advertised RTSP stream inside LinkPi Monitor. The player follows the effective source proportions after crop and rotation, and includes a local mute control. Right-click the video to copy the current full-resolution frame to the clipboard or save it as a PNG image.
 
 ![Embedded Watch window showing Linkpi1 HDMI](docs/screenshots/watch-window.png)
 

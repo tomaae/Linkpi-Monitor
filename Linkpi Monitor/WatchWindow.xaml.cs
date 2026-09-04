@@ -1,8 +1,12 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using LibVLCSharp.Shared;
+using Microsoft.Win32;
 using VlcMediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
 namespace Linkpi_Monitor;
@@ -17,13 +21,17 @@ public partial class WatchWindow : Window
     private const double HeaderHeight = 64;
     private const double PreferredVideoHeight = 596;
     private const double PreferredVideoWidth = 1060;
+    private static readonly TimeSpan SnapshotConfirmationDuration = TimeSpan.FromSeconds(2);
 
+    private readonly string _channelName;
     private readonly Uri _streamUri;
     private readonly LibVLC _libVlc;
     private readonly VlcMediaPlayer _mediaPlayer;
+    private readonly DispatcherTimer _snapshotConfirmationTimer;
     private readonly bool _hasConfiguredAspectRatio;
     private readonly string? _vlcAspectRatio;
     private Media? _media;
+    private bool _hasVideoOutput;
     private bool _isClosing;
     private bool _isMuted;
     private double _videoAspectRatio;
@@ -36,6 +44,7 @@ public partial class WatchWindow : Window
             throw new ArgumentException("The selected channel does not advertise a watchable stream.", nameof(channel));
         }
 
+        _channelName = channel.Name;
         _streamUri = channel.WatchUri;
         var geometry = VideoGeometry.FromChannel(channel);
         _videoAspectRatio = geometry.AspectRatio;
@@ -50,12 +59,15 @@ public partial class WatchWindow : Window
         _libVlc = new LibVLC("--no-video-title-show", "--rtsp-tcp", "--network-caching=300");
         _mediaPlayer = new VlcMediaPlayer(_libVlc) { Volume = 75 };
         VideoView.MediaPlayer = _mediaPlayer;
+        _snapshotConfirmationTimer = new DispatcherTimer { Interval = SnapshotConfirmationDuration };
+        _snapshotConfirmationTimer.Tick += SnapshotConfirmationTimer_Tick;
 
         _mediaPlayer.Opening += (_, _) => SetPlaybackStatus("Opening stream", WarningBrush);
         _mediaPlayer.Buffering += (_, args) => SetPlaybackStatus($"Buffering {args.Cache:0}%", WarningBrush);
         _mediaPlayer.Playing += (_, _) => SetPlaybackStatus("Playing", OnlineBrush);
-        _mediaPlayer.Vout += (_, _) =>
+        _mediaPlayer.Vout += (_, args) =>
         {
+            _hasVideoOutput = args.Count > 0;
             ApplyConfiguredAspectRatio();
             RefreshAspectRatioFromPlayer();
         };
@@ -100,6 +112,128 @@ public partial class WatchWindow : Window
             MuteButton.ClearValue(BackgroundProperty);
             MuteButton.ClearValue(BorderBrushProperty);
             MuteButton.ClearValue(ForegroundProperty);
+        }
+    }
+
+    private void VideoOverlay_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        CopyImageMenuItem.IsEnabled = _hasVideoOutput && !_isClosing;
+        SaveImageMenuItem.IsEnabled = _hasVideoOutput && !_isClosing;
+    }
+
+    private void CopyImageMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var temporaryPath = Path.Combine(Path.GetTempPath(), $"LinkPiMonitor-{Guid.NewGuid():N}.png");
+        try
+        {
+            if (!TakeSnapshot(temporaryPath))
+            {
+                return;
+            }
+
+            var image = new BitmapImage();
+            using (var stream = File.OpenRead(temporaryPath))
+            {
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.StreamSource = stream;
+                image.EndInit();
+            }
+
+            image.Freeze();
+            Clipboard.SetImage(image);
+            ShowSnapshotConfirmation("Frame copied");
+        }
+        catch (Exception exception)
+        {
+            ShowSnapshotError("The frame could not be copied.", exception);
+        }
+        finally
+        {
+            TryDeleteFile(temporaryPath);
+        }
+    }
+
+    private void SaveImageMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save video frame",
+            FileName = SnapshotFileName.Create(_channelName, DateTime.Now),
+            DefaultExt = ".png",
+            Filter = "PNG image (*.png)|*.png",
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var filePath = SnapshotFileName.EnsurePngExtension(dialog.FileName);
+        if (!filePath.Equals(dialog.FileName, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(filePath) &&
+            MessageBox.Show(this, $"{Path.GetFileName(filePath)} already exists. Replace it?", "Confirm save",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            if (TakeSnapshot(filePath))
+            {
+                ShowSnapshotConfirmation("Frame saved");
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowSnapshotError("The frame could not be saved.", exception);
+        }
+    }
+
+    private bool TakeSnapshot(string filePath)
+    {
+        if (!_hasVideoOutput || _isClosing || !_mediaPlayer.TakeSnapshot(0, filePath, 0, 0))
+        {
+            MessageBox.Show(this, "No video frame is currently available.", "Snapshot unavailable",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ShowSnapshotConfirmation(string message)
+    {
+        SnapshotConfirmationText.Text = message;
+        SnapshotConfirmation.Visibility = Visibility.Visible;
+        _snapshotConfirmationTimer.Stop();
+        _snapshotConfirmationTimer.Start();
+    }
+
+    private void SnapshotConfirmationTimer_Tick(object? sender, EventArgs e)
+    {
+        _snapshotConfirmationTimer.Stop();
+        SnapshotConfirmation.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowSnapshotError(string message, Exception exception) =>
+        MessageBox.Show(this, $"{message}\n\n{exception.Message}", "Snapshot failed",
+            MessageBoxButton.OK, MessageBoxImage.Error);
+
+    private static void TryDeleteFile(string filePath)
+    {
+        try
+        {
+            File.Delete(filePath);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 
@@ -195,6 +329,7 @@ public partial class WatchWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         _isClosing = true;
+        _snapshotConfirmationTimer.Stop();
         VideoView.MediaPlayer = null;
         _mediaPlayer.Stop();
         _media?.Dispose();
