@@ -8,6 +8,37 @@ namespace Linkpi_Monitor.Tests;
 public sealed class LinkPiClientEdgeCaseTests
 {
     [Fact]
+    public async Task StalledPreviewTimesOutWithoutBlockingOtherChannelsOrNextRefresh()
+    {
+        var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"enable\":true},{\"id\":1,\"type\":\"vi\",\"enable\":true}]");
+        handler.Override = request => request.Path == "/snap/snap0.jpg"
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new CancellationAwareStream())
+                { Headers = { ContentType = new("image/png") } }
+            }
+            : null;
+        using var client = new LinkPiClient(TestDevices.Default, handler, TimeSpan.FromMilliseconds(100));
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, snapshot.Channels.Count);
+        Assert.Equal("Snapshot unavailable", snapshot.Channels[0].PreviewMessage);
+        Assert.Contains(handler.Requests, request => request.Path == "/snap/snap1.jpg");
+        handler.Override = null;
+        await client.GetSnapshotAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task SnapshotRpcTimeoutDoesNotDiscardMonitoringData()
+    {
+        var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"enable\":true}]");
+        handler.Override = request => request.RpcMethod == "enc.snap"
+            ? throw new TaskCanceledException("Timed out", new TimeoutException()) : null;
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None);
+        Assert.Equal("Snapshot unavailable", Assert.Single(snapshot.Channels).PreviewMessage);
+    }
+
+    [Fact]
     public void PublicConstructorCreatesClientWithoutSendingARequest()
     {
         using var client = new LinkPiClient(new DeviceSettings

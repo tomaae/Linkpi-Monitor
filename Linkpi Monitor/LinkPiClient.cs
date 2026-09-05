@@ -17,6 +17,7 @@ public sealed class LinkPiClient : IDisposable
 
     private readonly DeviceSettings _device;
     private readonly HttpClient _httpClient;
+    private readonly TimeSpan _previewTimeout;
     private readonly SemaphoreSlim _authenticationGate = new(1, 1);
     private bool _authenticated;
     private int _requestId;
@@ -30,9 +31,10 @@ public sealed class LinkPiClient : IDisposable
     {
     }
 
-    internal LinkPiClient(DeviceSettings device, HttpMessageHandler handler)
+    internal LinkPiClient(DeviceSettings device, HttpMessageHandler handler, TimeSpan? previewTimeout = null)
     {
         _device = device;
+        _previewTimeout = previewTimeout ?? TimeSpan.FromSeconds(6);
         _httpClient = new HttpClient(handler)
         {
             BaseAddress = new Uri(device.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute),
@@ -932,7 +934,7 @@ public sealed class LinkPiClient : IDisposable
             await InvokeRpcAsync("RPC", "enc.snap", cancellationToken).ConfigureAwait(false);
             await Task.Delay(120, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -952,13 +954,15 @@ public sealed class LinkPiClient : IDisposable
 
     private async Task LoadPreviewImageAsync(ChannelDisplay channel, CancellationToken cancellationToken)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(_previewTimeout);
         try
         {
             var cacheKey = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             using var response = await _httpClient.GetAsync(
                 $"snap/snap{channel.Id}.jpg?rnd={cacheKey}",
                 HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken).ConfigureAwait(false);
+                deadline.Token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             var mediaType = response.Content.Headers.ContentType?.MediaType;
@@ -972,10 +976,10 @@ public sealed class LinkPiClient : IDisposable
                 throw new InvalidDataException("The preview image is too large.");
             }
 
-            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken)
+            await using var responseStream = await response.Content.ReadAsStreamAsync(deadline.Token)
                 .ConfigureAwait(false);
             using var imageStream = new MemoryStream();
-            await responseStream.CopyToAsync(imageStream, cancellationToken).ConfigureAwait(false);
+            await responseStream.CopyToAsync(imageStream, deadline.Token).ConfigureAwait(false);
             if (imageStream.Length is <= 0 or > 10 * 1024 * 1024)
             {
                 throw new InvalidDataException("The preview image has an invalid size.");
@@ -993,7 +997,7 @@ public sealed class LinkPiClient : IDisposable
             channel.PreviewImage = image;
             channel.PreviewMessage = string.Empty;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
