@@ -11,6 +11,7 @@ namespace Linkpi_Monitor;
 
 public sealed class LinkPiClient : IDisposable
 {
+    internal const int MaximumPreviewBytes = 10 * 1024 * 1024;
     private static readonly Brush OnlineBrush = Freeze("#39D98A");
     private static readonly Brush WarningBrush = Freeze("#FFB547");
     private static readonly Brush OfflineBrush = Freeze("#77808C");
@@ -971,7 +972,7 @@ public sealed class LinkPiClient : IDisposable
                 throw new InvalidDataException("The preview response is not an image.");
             }
 
-            if (response.Content.Headers.ContentLength is > 10 * 1024 * 1024)
+            if (response.Content.Headers.ContentLength is > MaximumPreviewBytes)
             {
                 throw new InvalidDataException("The preview image is too large.");
             }
@@ -979,8 +980,18 @@ public sealed class LinkPiClient : IDisposable
             await using var responseStream = await response.Content.ReadAsStreamAsync(deadline.Token)
                 .ConfigureAwait(false);
             using var imageStream = new MemoryStream();
-            await responseStream.CopyToAsync(imageStream, deadline.Token).ConfigureAwait(false);
-            if (imageStream.Length is <= 0 or > 10 * 1024 * 1024)
+            var buffer = new byte[81920];
+            while (true)
+            {
+                // Read at most one byte past the limit, even for chunked responses without a length.
+                var remaining = (int)(MaximumPreviewBytes - imageStream.Length);
+                var count = await responseStream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining + 1)),
+                    deadline.Token).ConfigureAwait(false);
+                if (count == 0) break;
+                if (count > remaining) throw new InvalidDataException("The preview image is too large.");
+                imageStream.Write(buffer, 0, count);
+            }
+            if (imageStream.Length == 0)
             {
                 throw new InvalidDataException("The preview image has an invalid size.");
             }

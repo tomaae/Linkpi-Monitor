@@ -8,6 +8,44 @@ namespace Linkpi_Monitor.Tests;
 public sealed class LinkPiClientEdgeCaseTests
 {
     [Fact]
+    public async Task ChunkedPreviewStopsReadingAtSizeLimit()
+    {
+        var stream = new OversizedPreviewStream();
+        var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"enable\":true}]");
+        handler.Override = request => request.Path.StartsWith("/snap/")
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(stream) { Headers = { ContentType = new("image/png") } }
+            } : null;
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None);
+        Assert.Equal("Snapshot unavailable", Assert.Single(snapshot.Channels).PreviewMessage);
+        Assert.Equal(LinkPiClient.MaximumPreviewBytes + 1, stream.BytesRead);
+    }
+
+    private sealed class OversizedPreviewStream : Stream
+    {
+        public int BytesRead { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => BytesRead; set => throw new NotSupportedException(); }
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            buffer.Span.Clear();
+            BytesRead += buffer.Length;
+            return ValueTask.FromResult(buffer.Length);
+        }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
     public async Task StalledPreviewTimesOutWithoutBlockingOtherChannelsOrNextRefresh()
     {
         var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"enable\":true},{\"id\":1,\"type\":\"vi\",\"enable\":true}]");
