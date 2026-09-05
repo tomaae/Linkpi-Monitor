@@ -522,6 +522,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _refreshTimer.Stop();
         _refreshCancellation?.Cancel();
         await _activeRefresh;
+        // Owned windows do not receive Closing when WPF closes their owner.
+        await Task.WhenAll(OwnedWindows.OfType<WatchWindow>().Select(window => window.PrepareToCloseAsync()));
         _client?.Dispose();
         _client = null;
         _closeReady = true;

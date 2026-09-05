@@ -3,7 +3,6 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using LibVLCSharp.Shared;
 using Microsoft.Win32;
@@ -28,11 +27,16 @@ public partial class WatchWindow : Window
     private readonly LibVLC _libVlc;
     private readonly VlcMediaPlayer _mediaPlayer;
     private readonly DispatcherTimer _snapshotConfirmationTimer;
+    private readonly CancellationTokenSource _snapshotCancellation = new();
+    private Task _snapshotOperation = Task.CompletedTask;
+    private Task? _shutdownTask;
+    private bool _snapshotBusy;
+    private bool _closeReady;
     private readonly bool _hasConfiguredAspectRatio;
     private readonly string? _vlcAspectRatio;
     private Media? _media;
-    private bool _hasVideoOutput;
-    private bool _isClosing;
+    private volatile bool _hasVideoOutput;
+    private volatile bool _isClosing;
     private bool _isMuted;
     private double _videoAspectRatio;
 
@@ -117,44 +121,50 @@ public partial class WatchWindow : Window
 
     private void VideoOverlay_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        CopyImageMenuItem.IsEnabled = _hasVideoOutput && !_isClosing;
-        SaveImageMenuItem.IsEnabled = _hasVideoOutput && !_isClosing;
+        CopyImageMenuItem.IsEnabled = _hasVideoOutput && !_isClosing && !_snapshotBusy;
+        SaveImageMenuItem.IsEnabled = CopyImageMenuItem.IsEnabled;
     }
 
-    private void CopyImageMenuItem_Click(object sender, RoutedEventArgs e)
+    private async void CopyImageMenuItem_Click(object sender, RoutedEventArgs e) => await StartSnapshotAsync(saveToFile: false);
+
+    private async void SaveImageMenuItem_Click(object sender, RoutedEventArgs e) => await StartSnapshotAsync(saveToFile: true);
+
+    private Task StartSnapshotAsync(bool saveToFile)
     {
-        var temporaryPath = Path.Combine(Path.GetTempPath(), $"LinkPiMonitor-{Guid.NewGuid():N}.png");
+        if (_snapshotBusy || _isClosing || !_hasVideoOutput) return Task.CompletedTask;
+        _snapshotBusy = true;
+        return _snapshotOperation = ProcessSnapshotAsync(saveToFile);
+    }
+
+    private async Task ProcessSnapshotAsync(bool saveToFile)
+    {
         try
         {
-            if (!TakeSnapshot(temporaryPath))
+            var frame = await FrameSnapshot.CaptureAsync(path => _mediaPlayer.TakeSnapshot(0, path, 0, 0),
+                _snapshotCancellation.Token);
+            _snapshotCancellation.Token.ThrowIfCancellationRequested();
+            if (saveToFile)
             {
-                return;
+                var filePath = ChooseSnapshotPath();
+                if (filePath is null) return;
+                await frame.SaveAsync(filePath, _snapshotCancellation.Token);
+                if (!_isClosing) ShowSnapshotConfirmation("Frame saved");
             }
-
-            var image = new BitmapImage();
-            using (var stream = File.OpenRead(temporaryPath))
+            else
             {
-                image.BeginInit();
-                image.CacheOption = BitmapCacheOption.OnLoad;
-                image.StreamSource = stream;
-                image.EndInit();
+                Clipboard.SetImage(frame.Image);
+                ShowSnapshotConfirmation("Frame copied");
             }
-
-            image.Freeze();
-            Clipboard.SetImage(image);
-            ShowSnapshotConfirmation("Frame copied");
         }
+        catch (OperationCanceledException) when (_snapshotCancellation.IsCancellationRequested) { }
         catch (Exception exception)
         {
-            ShowSnapshotError("The frame could not be copied.", exception);
+            if (!_isClosing) ShowSnapshotError(saveToFile ? "The frame could not be saved." : "The frame could not be copied.", exception);
         }
-        finally
-        {
-            TryDeleteFile(temporaryPath);
-        }
+        finally { _snapshotBusy = false; }
     }
 
-    private void SaveImageMenuItem_Click(object sender, RoutedEventArgs e)
+    private string? ChooseSnapshotPath()
     {
         var dialog = new SaveFileDialog
         {
@@ -168,7 +178,7 @@ public partial class WatchWindow : Window
 
         if (dialog.ShowDialog(this) != true)
         {
-            return;
+            return null;
         }
 
         var filePath = SnapshotFileName.EnsurePngExtension(dialog.FileName);
@@ -177,32 +187,9 @@ public partial class WatchWindow : Window
             MessageBox.Show(this, $"{Path.GetFileName(filePath)} already exists. Replace it?", "Confirm save",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {
-            return;
+            return null;
         }
-
-        try
-        {
-            if (TakeSnapshot(filePath))
-            {
-                ShowSnapshotConfirmation("Frame saved");
-            }
-        }
-        catch (Exception exception)
-        {
-            ShowSnapshotError("The frame could not be saved.", exception);
-        }
-    }
-
-    private bool TakeSnapshot(string filePath)
-    {
-        if (!_hasVideoOutput || _isClosing || !_mediaPlayer.TakeSnapshot(0, filePath, 0, 0))
-        {
-            MessageBox.Show(this, "No video frame is currently available.", "Snapshot unavailable",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return false;
-        }
-
-        return true;
+        return filePath;
     }
 
     private void ShowSnapshotConfirmation(string message)
@@ -222,20 +209,6 @@ public partial class WatchWindow : Window
     private void ShowSnapshotError(string message, Exception exception) =>
         MessageBox.Show(this, $"{message}\n\n{exception.Message}", "Snapshot failed",
             MessageBoxButton.OK, MessageBoxImage.Error);
-
-    private static void TryDeleteFile(string filePath)
-    {
-        try
-        {
-            File.Delete(filePath);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
 
     private void VideoHost_SizeChanged(object sender, SizeChangedEventArgs e) => ResizeVideoToAspectRatio();
 
@@ -326,15 +299,34 @@ public partial class WatchWindow : Window
         });
     }
 
-    private void Window_Closing(object? sender, CancelEventArgs e)
+    private async void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_closeReady) return;
+        e.Cancel = true;
+        await PrepareToCloseAsync();
+        _ = Dispatcher.BeginInvoke(Close);
+    }
+
+    internal Task PrepareToCloseAsync() => _shutdownTask ??= ShutdownAsync();
+
+    private async Task ShutdownAsync()
     {
         _isClosing = true;
+        IsEnabled = false;
         _snapshotConfirmationTimer.Stop();
+        _snapshotCancellation.Cancel();
+        await _snapshotOperation;
         VideoView.MediaPlayer = null;
-        _mediaPlayer.Stop();
-        _media?.Dispose();
-        _mediaPlayer.Dispose();
-        _libVlc.Dispose();
+        await Task.Run(() =>
+        {
+            _mediaPlayer.Stop();
+            _media?.Dispose();
+            _mediaPlayer.Dispose();
+            _libVlc.Dispose();
+        });
+        VideoView.Dispose();
+        _snapshotCancellation.Dispose();
+        _closeReady = true;
     }
 
     private void Window_Closed(object? sender, EventArgs e)
