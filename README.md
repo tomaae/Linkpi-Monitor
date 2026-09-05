@@ -39,6 +39,8 @@ Watch opens the selected channel's advertised RTSP stream inside LinkPi Monitor.
 
 ![Embedded Watch window showing Linkpi1 HDMI](docs/screenshots/watch-window.png)
 
+Copy image supplies the original PNG data plus a bitmap fallback for clipboard compatibility. The receiving application chooses which supported format to paste; Save image as always writes PNG.
+
 ### Channel configuration
 
 Each channel has one configuration window. Relevant tabs are selected from the channel type: physical inputs expose Input, network sources expose Decode, and every usable source exposes Encode and Stream.

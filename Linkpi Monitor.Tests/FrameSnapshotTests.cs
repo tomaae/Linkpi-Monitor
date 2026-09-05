@@ -7,6 +7,21 @@ namespace Linkpi_Monitor.Tests;
 public sealed class FrameSnapshotTests
 {
     [Fact]
+    public Task ClipboardPayloadContainsExactPngAndCompatibleBitmap() => WpfTestHost.RunAsync(async () =>
+    {
+        var frame = await FrameSnapshot.CaptureAsync(path =>
+        {
+            File.WriteAllBytes(path, TestDevices.OnePixelPng);
+            return true;
+        }, CancellationToken.None);
+        var data = frame.CreateClipboardData();
+        Assert.Contains("PNG", data.GetFormats(autoConvert: false));
+        using var png = Assert.IsType<MemoryStream>(data.GetData("PNG", autoConvert: false));
+        Assert.Equal(TestDevices.OnePixelPng, png.ToArray());
+        Assert.Same(frame.Image, data.GetImage());
+    });
+
+    [Fact]
     public async Task CaptureVerifiesNativePngAndCleansTemporaryFile()
     {
         string? temporaryPath = null;

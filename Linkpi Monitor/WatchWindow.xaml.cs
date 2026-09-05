@@ -152,7 +152,7 @@ public partial class WatchWindow : Window
             }
             else
             {
-                Clipboard.SetImage(frame.Image);
+                Clipboard.SetDataObject(frame.CreateClipboardData(), copy: true);
                 ShowSnapshotConfirmation("Frame copied");
             }
         }

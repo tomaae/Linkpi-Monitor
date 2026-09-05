@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using System.Windows.Media.Imaging;
 
 namespace Linkpi_Monitor;
@@ -7,6 +8,14 @@ internal sealed class FrameSnapshot
 {
     public byte[] PngBytes { get; }
     public BitmapSource Image { get; }
+
+    public DataObject CreateClipboardData()
+    {
+        var data = new DataObject();
+        data.SetData("PNG", new MemoryStream(PngBytes, writable: false), autoConvert: false);
+        data.SetImage(Image);
+        return data;
+    }
 
     private FrameSnapshot(byte[] pngBytes)
     {
