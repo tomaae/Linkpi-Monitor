@@ -396,8 +396,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var snapshot = await client.GetSnapshotAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
-            Replace(Channels, snapshot.Channels);
-            Replace(PushDestinations, snapshot.PushDestinations);
+            CollectionReconciler.Update(Channels, snapshot.Channels, channel => channel.Id,
+                (current, incoming) => current.UpdateFrom(incoming));
+            CollectionReconciler.Update(PushDestinations, snapshot.PushDestinations, push => push.Index,
+                (current, incoming) => current.UpdateFrom(incoming));
             SetPushConfiguration(snapshot.PushConfiguration);
             if (!_holdHardwareConfiguration)
             {

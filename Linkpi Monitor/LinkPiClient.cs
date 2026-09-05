@@ -19,6 +19,8 @@ public sealed class LinkPiClient : IDisposable
     private readonly DeviceSettings _device;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _previewTimeout;
+    private string? _channelConfigurationKey;
+    private readonly Dictionary<int, ChannelConfiguration> _channelConfigurations = [];
     private readonly SemaphoreSlim _authenticationGate = new(1, 1);
     private bool _authenticated;
     private int _requestId;
@@ -585,6 +587,13 @@ public sealed class LinkPiClient : IDisposable
         var configuredChannels = config.EnumerateArray()
             .Where(IsUserFacingChannel)
             .ToArray();
+        var configurationKey = config.GetRawText() + "|" +
+            (hardware.ValueKind == JsonValueKind.Undefined ? string.Empty : hardware.GetRawText());
+        if (_channelConfigurationKey != configurationKey)
+        {
+            _channelConfigurations.Clear();
+            _channelConfigurationKey = configurationKey;
+        }
         var audioSources = BuildAudioSourceOptions(configuredChannels);
         var encodeCapabilities = GetObject(GetObject(hardware, "capability"), "encode");
         var supports4K = GetString(encodeCapabilities, "maxSize").Contains("4K", StringComparison.OrdinalIgnoreCase);
@@ -603,6 +612,11 @@ public sealed class LinkPiClient : IDisposable
             var canPreview = CanPreview(channel);
             epgById.TryGetValue(id, out var epgEntry);
             inputStates.TryGetValue(id, out var sourceState);
+            if (!_channelConfigurations.TryGetValue(id, out var configuration))
+            {
+                configuration = ParseChannelConfiguration(channel, audioSources, supports4K, supportsBFrames);
+                _channelConfigurations[id] = configuration;
+            }
 
             channels.Add(new ChannelDisplay
             {
@@ -623,7 +637,7 @@ public sealed class LinkPiClient : IDisposable
                 CanPreview = canPreview,
                 SourceWidth = GetInt(sourceState, "width"),
                 SourceHeight = GetInt(sourceState, "height"),
-                Configuration = ParseChannelConfiguration(channel, audioSources, supports4K, supportsBFrames)
+                Configuration = configuration
             });
         }
 

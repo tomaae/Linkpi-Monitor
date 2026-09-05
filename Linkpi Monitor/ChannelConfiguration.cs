@@ -7,6 +7,9 @@ public sealed record SelectionOption(string Value, string Label);
 
 public sealed class ChannelConfiguration
 {
+    internal ChannelConfiguration CreateEditableCopy() =>
+        System.Text.Json.JsonSerializer.Deserialize<ChannelConfiguration>(
+            System.Text.Json.JsonSerializer.Serialize(this))!;
     public GeneralChannelConfiguration General { get; init; } = new();
     public PhysicalInputConfiguration Input { get; init; } = new();
     public DecodeConfiguration Decode { get; init; } = new();
@@ -90,6 +93,9 @@ public abstract class ConfigurationSection : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
     protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
@@ -98,7 +104,7 @@ public abstract class ConfigurationSection : INotifyPropertyChanged
         }
 
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        OnPropertyChanged(propertyName);
         return true;
     }
 }

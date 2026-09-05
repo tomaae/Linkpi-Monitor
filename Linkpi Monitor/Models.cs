@@ -16,43 +16,102 @@ public sealed class LinkPiSnapshot
     public bool IsPushing { get; init; }
 }
 
-public sealed class ChannelDisplay
+public sealed class ChannelDisplay : ConfigurationSection
 {
     public required int Id { get; init; }
-    public required string Name { get; init; }
-    public required string SourceType { get; init; }
-    public required string Status { get; init; }
-    public required Brush StatusBrush { get; init; }
-    public required string Initial { get; init; }
-    public required string VideoSummary { get; init; }
-    public required string AudioSummary { get; init; }
-    public required string OutputsSummary { get; init; }
-    public required string PreviewMessage { get; set; }
-    public ImageSource? PreviewImage { get; set; }
+    public required string Name { get; set => SetField(ref field, value); }
+    public required string SourceType { get; set => SetField(ref field, value); }
+    public required string Status { get; set => SetField(ref field, value); }
+    public required Brush StatusBrush { get; set => SetField(ref field, value); }
+    public required string Initial { get; set => SetField(ref field, value); }
+    public required string VideoSummary { get; set => SetField(ref field, value); }
+    public required string AudioSummary { get; set => SetField(ref field, value); }
+    public required string OutputsSummary { get; set => SetField(ref field, value); }
+    public required string PreviewMessage { get; set => SetField(ref field, value); }
+    public ImageSource? PreviewImage { get; set => SetField(ref field, value); }
+    public Uri? WatchUri { get; set => SetField(ref field, value); }
+    public bool IsEnabled { get; set => SetField(ref field, value); }
+    public bool CanPreview { get; set => SetField(ref field, value); }
+    public int SourceWidth { get; set => SetField(ref field, value); }
+    public int SourceHeight { get; set => SetField(ref field, value); }
+    public required ChannelConfiguration Configuration { get; set => SetField(ref field, value); }
+
+    internal void UpdateFrom(ChannelDisplay value)
+    {
+        Name = value.Name;
+        SourceType = value.SourceType;
+        Status = value.Status;
+        StatusBrush = value.StatusBrush;
+        Initial = value.Initial;
+        VideoSummary = value.VideoSummary;
+        AudioSummary = value.AudioSummary;
+        OutputsSummary = value.OutputsSummary;
+        PreviewMessage = value.PreviewMessage;
+        PreviewImage = value.PreviewImage;
+        WatchUri = value.WatchUri;
+        IsEnabled = value.IsEnabled;
+        CanPreview = value.CanPreview;
+        SourceWidth = value.SourceWidth;
+        SourceHeight = value.SourceHeight;
+        Configuration = value.Configuration;
+        OnPropertyChanged(nameof(HasPreview));
+        OnPropertyChanged(nameof(CanWatch));
+        OnPropertyChanged(nameof(PreviewRenderWidth));
+        OnPropertyChanged(nameof(PreviewRenderHeight));
+    }
+
     public bool HasPreview => PreviewImage is not null;
-    public Uri? WatchUri { get; init; }
     public bool CanWatch => WatchUri is not null;
-    public bool IsEnabled { get; init; }
-    public bool CanPreview { get; init; }
-    public int SourceWidth { get; init; }
-    public int SourceHeight { get; init; }
-    public required ChannelConfiguration Configuration { get; init; }
     public double PreviewRenderWidth => VideoGeometry.FromChannel(this).FitWithin(365, 170).Width;
     public double PreviewRenderHeight => VideoGeometry.FromChannel(this).FitWithin(365, 170).Height;
+
+    internal ChannelDisplay CreateEditableCopy() => new()
+    {
+        Id = Id,
+        Name = Name,
+        SourceType = SourceType,
+        Status = Status,
+        StatusBrush = StatusBrush,
+        Initial = Initial,
+        VideoSummary = VideoSummary,
+        AudioSummary = AudioSummary,
+        OutputsSummary = OutputsSummary,
+        PreviewMessage = PreviewMessage,
+        PreviewImage = PreviewImage,
+        WatchUri = WatchUri,
+        IsEnabled = IsEnabled,
+        CanPreview = CanPreview,
+        SourceWidth = SourceWidth,
+        SourceHeight = SourceHeight,
+        Configuration = Configuration.CreateEditableCopy(),
+    };
 }
 
-public sealed class PushDisplay
+public sealed class PushDisplay : ConfigurationSection
 {
     public required int Index { get; init; }
-    public required string Name { get; init; }
-    public required string Type { get; init; }
-    public required string Source { get; init; }
-    public required string Destination { get; init; }
-    public required string Status { get; init; }
-    public required string Speed { get; init; }
-    public required string Duration { get; init; }
-    public required Brush StatusBrush { get; init; }
-    public required PushDestinationConfiguration Configuration { get; init; }
+    public required string Name { get; set => SetField(ref field, value); }
+    public required string Type { get; set => SetField(ref field, value); }
+    public required string Source { get; set => SetField(ref field, value); }
+    public required string Destination { get; set => SetField(ref field, value); }
+    public required string Status { get; set => SetField(ref field, value); }
+    public required string Speed { get; set => SetField(ref field, value); }
+    public required string Duration { get; set => SetField(ref field, value); }
+    public required Brush StatusBrush { get; set => SetField(ref field, value); }
+    public required PushDestinationConfiguration Configuration { get; set => SetField(ref field, value); }
+
+    internal void UpdateFrom(PushDisplay value)
+    {
+        Name = value.Name;
+        Type = value.Type;
+        Source = value.Source;
+        Destination = value.Destination;
+        Status = value.Status;
+        Speed = value.Speed;
+        Duration = value.Duration;
+        StatusBrush = value.StatusBrush;
+        Configuration = value.Configuration;
+    }
 }
 
 public sealed class PushConfiguration : ConfigurationSection
