@@ -256,7 +256,7 @@ public sealed class LinkPiClient : IDisposable
         }
     }
 
-    public async Task<LinkPiSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
+    public async Task<LinkPiSnapshot> GetSnapshotAsync(CancellationToken cancellationToken, bool includePreviews = true)
     {
         var configTask = GetJsonAsync("config/config.json", cancellationToken);
         var pushConfigTask = GetJsonAsync("config/push.json", cancellationToken);
@@ -274,7 +274,7 @@ public sealed class LinkPiClient : IDisposable
         var rawPushConfig = await pushConfigTask;
         var rawHardware = await hardwareTask;
         var channels = ParseChannels(rawConfig, await inputTask, await epgTask, rawHardware);
-        await LoadPreviewImagesAsync(channels, cancellationToken).ConfigureAwait(false);
+        if (includePreviews) await LoadPreviewImagesAsync(channels, cancellationToken).ConfigureAwait(false);
         var pushState = await pushStateTask;
         var pushConfiguration = ParsePushConfiguration(rawPushConfig, channels, rawHardware);
 

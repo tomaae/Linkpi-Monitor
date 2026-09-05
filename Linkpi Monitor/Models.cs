@@ -36,7 +36,7 @@ public sealed class ChannelDisplay : ConfigurationSection
     public int SourceHeight { get; set => SetField(ref field, value); }
     public required ChannelConfiguration Configuration { get; set => SetField(ref field, value); }
 
-    internal void UpdateFrom(ChannelDisplay value)
+    internal void UpdateFrom(ChannelDisplay value, bool updatePreview = true)
     {
         Name = value.Name;
         SourceType = value.SourceType;
@@ -46,8 +46,11 @@ public sealed class ChannelDisplay : ConfigurationSection
         VideoSummary = value.VideoSummary;
         AudioSummary = value.AudioSummary;
         OutputsSummary = value.OutputsSummary;
-        PreviewMessage = value.PreviewMessage;
-        PreviewImage = value.PreviewImage;
+        if (updatePreview || !value.CanPreview)
+        {
+            PreviewMessage = value.PreviewMessage;
+            PreviewImage = value.PreviewImage;
+        }
         WatchUri = value.WatchUri;
         IsEnabled = value.IsEnabled;
         CanPreview = value.CanPreview;

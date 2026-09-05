@@ -393,11 +393,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
-            var snapshot = await client.GetSnapshotAsync(cancellationToken);
+            var includePreviews = IsVisible && WindowState != WindowState.Minimized && MainTabs.SelectedItem == SourcesTab;
+            var snapshot = await client.GetSnapshotAsync(cancellationToken, includePreviews);
             cancellationToken.ThrowIfCancellationRequested();
 
             CollectionReconciler.Update(Channels, snapshot.Channels, channel => channel.Id,
-                (current, incoming) => current.UpdateFrom(incoming));
+                (current, incoming) => current.UpdateFrom(incoming, includePreviews));
             CollectionReconciler.Update(PushDestinations, snapshot.PushDestinations, push => push.Index,
                 (current, incoming) => current.UpdateFrom(incoming));
             SetPushConfiguration(snapshot.PushConfiguration);
@@ -506,12 +507,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _holdHardwareConfiguration = MainTabs.SelectedItem is TabItem { Header: "Hardware" };
     }
 
-    private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (e.Source == MainTabs)
         {
             _holdHardwareConfiguration = MainTabs.SelectedItem is TabItem { Header: "Hardware" };
+            await RefreshForPreviewActivityAsync();
         }
+    }
+
+    private async void Window_StateChanged(object? sender, EventArgs e) => await RefreshForPreviewActivityAsync();
+
+    private async void Window_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) =>
+        await RefreshForPreviewActivityAsync();
+
+    private async Task RefreshForPreviewActivityAsync()
+    {
+        if (!_isLoaded || _isClosing) return;
+        _refreshCancellation?.Cancel();
+        await _activeRefresh;
+        await RefreshAsync();
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)

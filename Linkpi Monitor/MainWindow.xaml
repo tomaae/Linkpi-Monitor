@@ -7,7 +7,8 @@
         mc:Ignorable="d"
         Title="LinkPi Monitor" Icon="App.ico" Height="820" Width="1280" MinWidth="980" MinHeight="640"
         Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded" Closing="Window_Closing">
+        Loaded="Window_Loaded" Closing="Window_Closing" StateChanged="Window_StateChanged"
+        IsVisibleChanged="Window_IsVisibleChanged">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="72" />
@@ -94,7 +95,7 @@
 
             <TabControl x:Name="MainTabs" Grid.Row="2" Margin="18,0,18,18" Background="Transparent" BorderThickness="0"
                         SelectionChanged="MainTabs_SelectionChanged">
-                <TabItem Header="Sources &amp; Streams">
+                <TabItem x:Name="SourcesTab" Header="Sources &amp; Streams">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="6,14,6,20">
                             <ItemsControl ItemsSource="{Binding Channels}">

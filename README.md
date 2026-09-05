@@ -155,6 +155,8 @@ LinkPi firmware exposes a mixture of JSON configuration documents, JSON-RPC meth
 
 Monitoring does not invoke update, start, or stop operations. Snapshot failures are isolated per channel so one unavailable source does not fail the entire refresh.
 
+Monitoring continues while the window is minimized or another tab is selected, but preview generation and image downloads run only while Sources & Streams is visible. Returning to that view requests fresh previews.
+
 Firmware schemas differ between devices. The application preserves properties it does not understand, retains firmware-specific string/number representations where required, and omits optional fields that the active firmware does not provide. Even so, configuration changes should be tested carefully after adding support for a new model or firmware family.
 
 ## Project layout
