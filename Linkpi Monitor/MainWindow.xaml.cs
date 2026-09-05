@@ -382,10 +382,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _refreshCancellation?.Cancel();
         _refreshCancellation?.Dispose();
         _refreshCancellation = new CancellationTokenSource();
+        var cancellationToken = _refreshCancellation.Token;
 
         try
         {
-            var snapshot = await _client.GetSnapshotAsync(_refreshCancellation.Token);
+            var snapshot = await _client.GetSnapshotAsync(cancellationToken);
 
             Replace(Channels, snapshot.Channels);
             Replace(PushDestinations, snapshot.PushDestinations);
@@ -404,7 +405,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ConnectionBrush = OnlineBrush;
             ErrorMessage = string.Empty;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // A device change or application close superseded this refresh.
         }
@@ -431,6 +432,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         ConnectionStatus = "Unavailable";
         ConnectionBrush = OfflineBrush;
+        CpuDisplay = "—";
+        MemoryDisplay = "—";
+        TemperatureDisplay = "—";
         ErrorMessage = $"Could not refresh the selected LinkPi: {exception.Message}";
     }
 
