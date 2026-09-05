@@ -25,7 +25,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private static readonly Brush BusyBrush = CreateBrush("#F5B82E");
 
     private readonly DispatcherTimer _refreshTimer = new();
-    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private Task _activeRefresh = Task.CompletedTask;
+    private bool _isClosing;
+    private bool _closeReady;
     private AppSettings? _settings;
     private LinkPiClient? _client;
     private CancellationTokenSource? _refreshCancellation;
@@ -130,6 +132,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             try
             {
                 _settings = await AppSettings.LoadAsync();
+                if (_isClosing) return;
             }
             catch (Exception exception)
             {
@@ -157,7 +160,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ShowNoDeviceState();
             }
 
-            _refreshTimer.Start();
+            if (!_isClosing) _refreshTimer.Start();
         }
         catch (Exception exception)
         {
@@ -372,21 +375,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void RefreshTimer_Tick(object? sender, EventArgs e) => await RefreshAsync();
 
-    private async Task RefreshAsync()
+    private Task RefreshAsync()
     {
-        if (_client is null || !await _refreshGate.WaitAsync(0))
+        if (_isClosing || _client is null || !_activeRefresh.IsCompleted)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        _refreshCancellation?.Cancel();
-        _refreshCancellation?.Dispose();
-        _refreshCancellation = new CancellationTokenSource();
-        var cancellationToken = _refreshCancellation.Token;
+        return _activeRefresh = RefreshCoreAsync(_client);
+    }
+
+    private async Task RefreshCoreAsync(LinkPiClient client)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _refreshCancellation = cancellation;
+        var cancellationToken = cancellation.Token;
 
         try
         {
-            var snapshot = await _client.GetSnapshotAsync(cancellationToken);
+            var snapshot = await client.GetSnapshotAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
             Replace(Channels, snapshot.Channels);
             Replace(PushDestinations, snapshot.PushDestinations);
@@ -415,7 +423,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         finally
         {
-            _refreshGate.Release();
+            if (ReferenceEquals(_refreshCancellation, cancellation)) _refreshCancellation = null;
         }
     }
 
@@ -504,13 +512,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void Window_Closed(object? sender, EventArgs e)
+    private async void Window_Closing(object? sender, CancelEventArgs e)
     {
+        if (_closeReady) return;
+        e.Cancel = true;
+        if (_isClosing) return;
+        _isClosing = true;
+        IsEnabled = false;
         _refreshTimer.Stop();
         _refreshCancellation?.Cancel();
-        _refreshCancellation?.Dispose();
+        await _activeRefresh;
         _client?.Dispose();
-        _refreshGate.Dispose();
+        _client = null;
+        _closeReady = true;
+        // A synchronous refresh must not cause a recursive Close inside WPF's Closing event.
+        _ = Dispatcher.BeginInvoke(Close);
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
