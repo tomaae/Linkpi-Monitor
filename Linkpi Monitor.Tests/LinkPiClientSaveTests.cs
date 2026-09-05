@@ -94,6 +94,7 @@ public sealed class LinkPiClientSaveTests
         var configuration = new PushConfiguration { Autorun = true, AutorunStoredAsString = true };
         configuration.Destinations.Add(new PushDestinationConfiguration
         {
+            OriginalIndex = 0,
             Name = "Updated",
             Enabled = false,
             Type = "normal",

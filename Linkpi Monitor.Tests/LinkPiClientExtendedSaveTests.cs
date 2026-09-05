@@ -203,6 +203,7 @@ public sealed class LinkPiClientExtendedSaveTests
         var configuration = new PushConfiguration { Autorun = false, AutorunStoredAsString = false };
         configuration.Destinations.Add(new PushDestinationConfiguration
         {
+            OriginalIndex = 0,
             Name = "Only",
             Enabled = false,
             Type = "webrtc",

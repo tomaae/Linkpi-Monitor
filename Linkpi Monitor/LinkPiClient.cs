@@ -162,14 +162,20 @@ public sealed class LinkPiClient : IDisposable
             ? JsonValue.Create(configuration.Autorun.ToString().ToLowerInvariant())
             : JsonValue.Create(configuration.Autorun);
         var existing = root["url"] as JsonArray;
+        if (configuration.OriginalDestinationsJson is { } original &&
+            !JsonNode.DeepEquals(JsonNode.Parse(original), existing))
+        {
+            throw new InvalidOperationException("Push destinations changed on the device. Reopen the configuration before saving.");
+        }
         var destinations = new JsonArray();
 
         for (var index = 0; index < configuration.Destinations.Count; index++)
         {
-            var target = index < existing?.Count && existing[index] is JsonObject existingObject
-                ? (JsonObject)existingObject.DeepClone()
-                : new JsonObject();
             var source = configuration.Destinations[index];
+            var target = source.OriginalIndex is int originalIndex && originalIndex >= 0 &&
+                originalIndex < existing?.Count && existing[originalIndex] is JsonObject existingObject
+                    ? (JsonObject)existingObject.DeepClone()
+                    : new JsonObject();
             target["des"] = source.Name;
             target["enable"] = source.Enabled;
             target["type"] = source.Type;
@@ -1056,6 +1062,8 @@ public sealed class LinkPiClient : IDisposable
 
         var configuration = new PushConfiguration
         {
+            OriginalDestinationsJson = pushConfig.TryGetProperty("url", out var originalDestinations) &&
+                originalDestinations.ValueKind == JsonValueKind.Array ? originalDestinations.GetRawText() : null,
             Autorun = GetBool(pushConfig, "autorun"),
             AutorunStoredAsString = PropertyIsString(pushConfig, "autorun"),
             VideoSources = videoSources,
@@ -1075,6 +1083,7 @@ public sealed class LinkPiClient : IDisposable
             var type = GetString(destination, "type", "normal");
             configuration.Destinations.Add(new PushDestinationConfiguration
             {
+                OriginalIndex = configuration.Destinations.Count,
                 Name = GetString(destination, "des", $"Push {configuration.Destinations.Count + 1}"),
                 Type = type,
                 Types = EnsureOption(types, type, type),

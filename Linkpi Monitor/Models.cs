@@ -57,6 +57,7 @@ public sealed class PushDisplay
 
 public sealed class PushConfiguration : ConfigurationSection
 {
+    internal string? OriginalDestinationsJson { get; init; }
     private bool _autorun;
 
     public bool Autorun
@@ -74,6 +75,7 @@ public sealed class PushConfiguration : ConfigurationSection
 
 public sealed class PushDestinationConfiguration : ConfigurationSection
 {
+    internal int? OriginalIndex { get; init; }
     private string _name = string.Empty;
 
     public string Name
