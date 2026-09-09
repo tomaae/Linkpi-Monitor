@@ -10,6 +10,10 @@
         <SolidColorBrush x:Key="TextBrush" Color="#F2F5F7" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="#9AA6B2" />
         <SolidColorBrush x:Key="AccentBrush" Color="#F5B82E" />
+        <SolidColorBrush x:Key="PopupBackgroundBrush" Color="#F2F5F7" />
+        <SolidColorBrush x:Key="PopupTextBrush" Color="#11161C" />
+        <SolidColorBrush x:Key="PopupMutedTextBrush" Color="#5D6670" />
+        <SolidColorBrush x:Key="PopupHighlightBrush" Color="#D9EAF7" />
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
@@ -27,7 +31,38 @@
                 <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type ComboBoxItem}}, Path=IsEnabled}" Value="False">
                     <Setter Property="Foreground" Value="#5D6670" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type MenuItem}}, Path=IsEnabled}" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource PopupTextBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType={x:Type MenuItem}}, Path=IsEnabled}" Value="False">
+                    <Setter Property="Foreground" Value="{StaticResource PopupMutedTextBrush}" />
+                </DataTrigger>
             </Style.Triggers>
+        </Style>
+        <Style TargetType="ContextMenu">
+            <Setter Property="Foreground" Value="{StaticResource PopupTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource PopupBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="#4A5665" />
+        </Style>
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource PopupTextBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource PopupTextBrush}" />
+                    <Setter Property="Background" Value="{StaticResource PopupHighlightBrush}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{StaticResource PopupMutedTextBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="ToolTip">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,5" />
         </Style>
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
