@@ -38,6 +38,7 @@ public partial class WatchWindow : Window
     private volatile bool _hasVideoOutput;
     private volatile bool _isClosing;
     private bool _isMuted;
+    private bool _canRestartPlayback;
     private double _videoAspectRatio;
 
     public WatchWindow(ChannelDisplay channel)
@@ -66,9 +67,9 @@ public partial class WatchWindow : Window
         _snapshotConfirmationTimer = new DispatcherTimer { Interval = SnapshotConfirmationDuration };
         _snapshotConfirmationTimer.Tick += SnapshotConfirmationTimer_Tick;
 
-        _mediaPlayer.Opening += (_, _) => SetPlaybackStatus("Opening stream", WarningBrush);
-        _mediaPlayer.Buffering += (_, args) => SetPlaybackStatus($"Buffering {args.Cache:0}%", WarningBrush);
-        _mediaPlayer.Playing += (_, _) => SetPlaybackStatus("Playing", OnlineBrush);
+        _mediaPlayer.Opening += (_, _) => SetPlaybackStatus("Opening stream", WarningBrush, canRestart: false);
+        _mediaPlayer.Buffering += (_, args) => SetPlaybackStatus($"Buffering {args.Cache:0}%", WarningBrush, canRestart: false);
+        _mediaPlayer.Playing += (_, _) => SetPlaybackStatus("Playing", OnlineBrush, canRestart: false);
         _mediaPlayer.Vout += (_, args) =>
         {
             _hasVideoOutput = args.Count > 0;
@@ -76,9 +77,9 @@ public partial class WatchWindow : Window
             RefreshAspectRatioFromPlayer();
         };
         _mediaPlayer.Paused += (_, _) => SetPlaybackStatus("Paused", WarningBrush);
-        _mediaPlayer.Stopped += (_, _) => SetPlaybackStatus("Stopped", WarningBrush);
-        _mediaPlayer.EncounteredError += (_, _) => SetPlaybackStatus("Playback failed", OfflineBrush);
-        _mediaPlayer.EndReached += (_, _) => SetPlaybackStatus("Stream ended", WarningBrush);
+        _mediaPlayer.Stopped += (_, _) => SetPlaybackStatus("Stopped", WarningBrush, canRestart: true);
+        _mediaPlayer.EncounteredError += (_, _) => SetPlaybackStatus("Playback failed", OfflineBrush, canRestart: true);
+        _mediaPlayer.EndReached += (_, _) => SetPlaybackStatus("Stream ended", WarningBrush, canRestart: true);
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -89,23 +90,49 @@ public partial class WatchWindow : Window
 
     private void StartPlayback()
     {
-        _mediaPlayer.Stop();
+        if (_mediaPlayer.IsPlaying)
+        {
+            _mediaPlayer.Stop();
+        }
         _media?.Dispose();
         _media = new Media(_libVlc, _streamUri);
         _media.AddOption(":rtsp-tcp");
         _media.AddOption(":network-caching=300");
         _mediaPlayer.Play(_media);
+        _mediaPlayer.Mute = _isMuted;
         ApplyConfiguredAspectRatio();
     }
 
     private void MuteButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_canRestartPlayback)
+        {
+            _canRestartPlayback = false;
+            ApplyPlaybackButtonState();
+            SetPlaybackStatus("Opening stream", WarningBrush, canRestart: false);
+            StartPlayback();
+            return;
+        }
+
         _isMuted = !_isMuted;
         _mediaPlayer.Mute = _isMuted;
-        MuteButton.Content = _isMuted ? "Unmute" : "Mute";
-        MuteButton.ToolTip = _isMuted ? "Restore audio for this live view" : "Mute this live view";
+        ApplyPlaybackButtonState();
+    }
 
-        if (_isMuted)
+    private void ApplyPlaybackButtonState()
+    {
+        if (_canRestartPlayback)
+        {
+            MuteButton.Content = "Play";
+            MuteButton.ToolTip = "Restart this live view";
+        }
+        else
+        {
+            MuteButton.Content = _isMuted ? "Unmute" : "Mute";
+            MuteButton.ToolTip = _isMuted ? "Restore audio for this live view" : "Mute this live view";
+        }
+
+        if (_canRestartPlayback || _isMuted)
         {
             MuteButton.Background = AccentBrush;
             MuteButton.BorderBrush = AccentBrush;
@@ -280,7 +307,7 @@ public partial class WatchWindow : Window
         });
     }
 
-    private void SetPlaybackStatus(string text, Brush brush)
+    private void SetPlaybackStatus(string text, Brush brush, bool? canRestart = null)
     {
         if (_isClosing)
         {
@@ -296,6 +323,11 @@ public partial class WatchWindow : Window
 
             PlaybackStatusText.Text = text;
             PlaybackStatusDot.Fill = brush;
+            if (canRestart.HasValue)
+            {
+                _canRestartPlayback = canRestart.Value;
+                ApplyPlaybackButtonState();
+            }
         });
     }
 
