@@ -32,7 +32,9 @@
 
         <Border x:Name="VideoHost" Grid.Row="1" Background="Black" SizeChanged="VideoHost_SizeChanged">
             <vlc:VideoView x:Name="VideoView" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Grid Background="Transparent" ContextMenuOpening="VideoOverlay_ContextMenuOpening">
+                <!-- LibVLC renders into a native child window. A tiny non-zero alpha makes this
+                     overlay participate in WPF hit testing without visibly tinting the video. -->
+                <Grid Background="#02000000" ContextMenuOpening="VideoOverlay_ContextMenuOpening">
                     <Grid.ContextMenu>
                         <ContextMenu>
                             <MenuItem x:Name="CopyImageMenuItem" Header="Copy image" Click="CopyImageMenuItem_Click" />
