@@ -99,13 +99,13 @@ public sealed class FrameSnapshotTests
         try
         {
             var path = Path.Combine(directory.FullName, "frame.png");
-            await File.WriteAllTextAsync(path, "existing");
+            await File.WriteAllTextAsync(path, "existing", TestContext.Current.CancellationToken);
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => frame.SaveAsync(path, cancellation.Token));
-            Assert.Equal("existing", await File.ReadAllTextAsync(path));
+            Assert.Equal("existing", await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
             await frame.SaveAsync(path, CancellationToken.None);
-            Assert.Equal(TestDevices.OnePixelPng, await File.ReadAllBytesAsync(path));
+            Assert.Equal(TestDevices.OnePixelPng, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
             Assert.Single(directory.GetFiles());
         }
         finally { directory.Delete(recursive: true); }

@@ -8,7 +8,7 @@ param(
     [double]$MinimumBranchCoverage = 80
 )
 
-$report = Get-ChildItem -LiteralPath $ResultsDirectory -Filter 'coverage.cobertura.xml' -Recurse |
+$report = Get-ChildItem -LiteralPath $ResultsDirectory -Filter 'coverage.cobertura*.xml' -Recurse |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 

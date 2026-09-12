@@ -21,6 +21,7 @@ Built with C# 14, .NET 10 WPF, and LibVLCSharp.
 
 - Manage multiple LinkPi devices and switch between them without restarting the application.
 - Display the detected model, CPU use, memory use, temperature, and connection state.
+- Keep the dashboard usable when optional telemetry endpoints are temporarily unavailable.
 - Discover channel layouts dynamically instead of assuming a fixed four-channel device.
 - Present HDMI, USB camera, network decoder, and Mix channels in one dashboard.
 - Hide internal File, ColorKey, and Image channels.
@@ -30,12 +31,13 @@ Built with C# 14, .NET 10 WPF, and LibVLCSharp.
 - Configure decode, input, encode, audio, streaming, transport, HLS, NDI, and Push settings.
 - Display physical audio input/output and HDMI output controls only when the device reports those capabilities.
 - Preserve unknown firmware-specific JSON properties when saving supported settings.
+- Validate edits before sending them and protect against losing unsaved configuration changes.
 
 ## Interface
 
 ### Watch
 
-Watch opens the selected channel's advertised RTSP stream inside LinkPi Monitor. The player follows the effective source proportions after crop and rotation, and includes a local mute control. Right-click the video to copy the current full-resolution frame to the clipboard or save it as a PNG image. Capture and file processing run in the background; success is reported only after the PNG is verified and copied or saved. Save captures the frame before opening the filename dialog.
+Watch opens the selected channel's advertised RTSP stream inside LinkPi Monitor. The player follows the effective source proportions after crop and rotation, and includes local mute, copy-frame, and save-frame controls. The same frame commands are available by right-clicking the video. Capture and file processing run in the background; success is reported only after the PNG is verified and copied or saved. Save captures the frame before opening the filename dialog.
 
 ![Embedded Watch window showing Linkpi1 HDMI](docs/screenshots/watch-window.png)
 
@@ -85,7 +87,7 @@ The published package includes the required x64 LibVLC runtime. VLC does not nee
 
 ## Configuration
 
-On first launch, the application creates `config.json` beside the executable. Use **Add device**, **Edit**, and **Delete** in the header to manage the same file from the UI.
+On first launch, the application creates an empty device list at `%LOCALAPPDATA%\Linkpi Monitor\config.json`. Use **Add device**, **Edit**, and **Delete** in the header to manage it. A legacy `config.json` beside the executable is imported automatically when the new location does not exist; the original is left untouched.
 
 ```json
 {
@@ -95,16 +97,16 @@ On first launch, the application creates `config.json` beside the executable. Us
       "Name": "Studio LinkPi",
       "BaseUrl": "http://192.0.2.10",
       "Username": "your-username",
-      "Password": "your-password"
+      "Password": ""
     }
   ]
 }
 ```
 
-The file is validated before any device connection is attempted. `Devices` must be an array (an empty array is valid), every entry must be an object with a unique absolute HTTP or HTTPS `BaseUrl`, and optional name and credential values must be strings. A base URL may contain a scheme, host, and optional port, but no credentials, path, query, or fragment. `RefreshIntervalSeconds` must be a whole number and is clamped to 2–300 seconds. Only the selected device is polled, and the legacy single-`LinkPi` configuration shape remains supported. Validation failures are shown in the main window without replacing the invalid file.
+The file is validated before any device connection is attempted. `Devices` must be an array (an empty array is valid), every entry must be an object with a unique absolute HTTP or HTTPS `BaseUrl`, and optional name and credential values must be strings. A base URL may contain a scheme, host, and optional port, but no credentials, path, query, or fragment. `RefreshIntervalSeconds` must be a whole number and is clamped to 2–300 seconds. Only the selected device is polled, and the legacy single-`LinkPi` configuration shape remains supported. Validation failures offer actions to open the file or back it up and reset safely.
 
 > [!IMPORTANT]
-> `config.json` stores credentials as plain local JSON. It is excluded from Git and from release packages. Keep the application directory accessible only to trusted users and never commit the real file.
+> Passwords saved through the application are encrypted with Windows Data Protection API for the current Windows user. Existing plaintext passwords remain readable and are encrypted on the next save. The protected value cannot be moved to another Windows account. HTTP devices still receive credentials without transport encryption, so the editor warns before using credentials over HTTP; prefer HTTPS or a trusted isolated network.
 
 ## Run from source
 
@@ -118,7 +120,7 @@ dotnet run --project '.\Linkpi Monitor\Linkpi Monitor.csproj'
 dotnet test '.\Linkpi Monitor.slnx'
 ```
 
-The automated tests use isolated temporary files and an in-memory HTTP handler, so they never contact a LinkPi device. They cover settings migration and validation, video geometry, observable configuration models, snapshot and preview parsing, authentication, firmware error handling, channel/Push/hardware save payloads, preservation of unknown firmware fields and JSON value types, dynamic channel discovery, and the guarantee that saving Push configuration does not invoke Push start or stop methods. CI also collects coverage for the testable application core and requires at least 90% line and 80% branch coverage. Generated XAML, WPF window event handlers, and LibVLC playback remain manual integration-test areas.
+The automated tests use isolated temporary files and an in-memory HTTP handler, so they never contact a LinkPi device. They cover protected settings storage, migration and validation, video geometry, observable configuration models, snapshot and preview parsing, authentication recovery, firmware error handling, channel/Push/hardware save payloads, preservation of unknown firmware fields and JSON value types, dynamic channel discovery, and the guarantee that saving Push configuration does not invoke Push start or stop methods. CI runs xUnit v3 on Microsoft Testing Platform, collects coverage for the testable application core, and requires at least 90% line and 80% branch coverage. Generated XAML, WPF window event handlers, and LibVLC playback remain manual integration-test areas.
 
 ## Create a release package
 
@@ -139,9 +141,10 @@ The script restores the solution, runs Release tests, publishes a framework-depe
 ```text
 artifacts/LinkpiMonitor/
 artifacts/LinkpiMonitor-win-x64.zip
+artifacts/LinkpiMonitor-win-x64.zip.sha256
 ```
 
-The release package includes `LICENSE`, `THIRD-PARTY-NOTICES.txt`, and the required LibVLC binaries. It never includes `config.json`.
+The release package includes `LICENSE`, `THIRD-PARTY-NOTICES.txt`, and the required LibVLC binaries. It never includes `config.json`. The separate checksum file lets downloads be checked for accidental corruption. Release executables are not Authenticode-signed unless the release environment supplies a code-signing step, so Windows may display an unknown-publisher warning.
 
 ## Device API behavior
 
@@ -153,7 +156,7 @@ LinkPi firmware exposes a mixture of JSON configuration documents, JSON-RPC meth
 - The authenticated default-configuration update relay for channel and hardware saves
 - `push.update` for Push configuration saves
 
-Monitoring does not invoke update, start, or stop operations. Snapshot failures are isolated per channel so one unavailable source does not fail the entire refresh.
+Monitoring does not invoke update, start, or stop operations. Optional endpoint and per-channel snapshot failures are isolated so one unavailable source does not fail the entire refresh. Configuration responses are accepted only from the configured device origin; cross-origin redirects and HTTPS-to-HTTP downgrades are rejected. Authentication is retried once when a saved session expires.
 
 Monitoring continues while the window is minimized or another tab is selected, but preview generation and image downloads run only while Sources & Streams is visible. Returning to that view requests fresh previews.
 

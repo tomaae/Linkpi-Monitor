@@ -12,7 +12,7 @@ public sealed class AppSettingsTests
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
 
-        var settings = await AppSettings.LoadAsync(path);
+        var settings = await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Equal(5, settings.RefreshIntervalSeconds);
         Assert.Empty(settings.Devices);
@@ -30,9 +30,9 @@ public sealed class AppSettingsTests
         var path = temporary.File("config.json");
         await File.WriteAllTextAsync(path, $$"""
             {"RefreshIntervalSeconds":{{configured}},"Devices":[]}
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var settings = await AppSettings.LoadAsync(path);
+        var settings = await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, settings.RefreshIntervalSeconds);
         Assert.Empty(settings.Devices);
@@ -50,9 +50,9 @@ public sealed class AppSettingsTests
                 {"Name":"  ","BaseUrl":"https://encoder.example:8443/","Username":"two","Password":"secret-two"}
               ]
             }
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var settings = await AppSettings.LoadAsync(path);
+        var settings = await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Collection(settings.Devices,
             first =>
@@ -76,9 +76,9 @@ public sealed class AppSettingsTests
         var path = temporary.File("config.json");
         await File.WriteAllTextAsync(path, """
             {"RefreshIntervalSeconds":8,"LinkPi":{"Name":"Legacy","BaseUrl":"http://legacy.test","Username":"admin","Password":"pw"}}
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var settings = await AppSettings.LoadAsync(path);
+        var settings = await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken);
 
         var device = Assert.Single(settings.Devices);
         Assert.Equal(8, settings.RefreshIntervalSeconds);
@@ -91,9 +91,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, "{}");
+        await File.WriteAllTextAsync(path, "{}", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("Either Devices", exception.Message);
     }
@@ -103,9 +103,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, "{\"Devices\":[]}");
+        await File.WriteAllTextAsync(path, "{\"Devices\":[]}", TestContext.Current.CancellationToken);
 
-        var settings = await AppSettings.LoadAsync(path);
+        var settings = await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Empty(settings.Devices);
         Assert.Equal(5, settings.RefreshIntervalSeconds);
@@ -122,9 +122,9 @@ public sealed class AppSettingsTests
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new
         {
             Devices = new[] { new { Name = "Bad", BaseUrl = baseUrl } }
-        }));
+        }), TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains(expectedMessage, exception.Message);
     }
@@ -138,9 +138,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, json);
+        await File.WriteAllTextAsync(path, json, TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("root value must be a JSON object", exception.Message);
     }
@@ -154,9 +154,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, $$"""{"Devices":{{devicesJson}}}""");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":{{devicesJson}}}""", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("Devices must be a JSON array", exception.Message);
     }
@@ -170,11 +170,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(
-            path,
-            $$"""{"RefreshIntervalSeconds":{{intervalJson}},"Devices":[]}""");
+        await File.WriteAllTextAsync(path, $$"""{"RefreshIntervalSeconds":{{intervalJson}},"Devices":[]}""", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("RefreshIntervalSeconds must be a whole number", exception.Message);
     }
@@ -187,9 +185,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, $$"""{"Devices":[{{deviceJson}}]}""");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":[{{deviceJson}}]}""", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("Devices[0] must be a JSON object", exception.Message);
     }
@@ -203,9 +201,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, $$"""{"Devices":[{{deviceJson}}]}""");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":[{{deviceJson}}]}""", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("Devices[0].BaseUrl", exception.Message);
         Assert.Contains(expectedMessage, exception.Message);
@@ -219,11 +217,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(
-            path,
-            $$"""{"Devices":[{"BaseUrl":"http://encoder.test","{{propertyName}}":{{propertyJson}}}]}""");
+        await File.WriteAllTextAsync(path, $$"""{"Devices":[{"BaseUrl":"http://encoder.test","{{propertyName}}":{{propertyJson}}}]}""", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains($"Devices[0].{propertyName} must be a string", exception.Message);
     }
@@ -240,9 +236,9 @@ public sealed class AppSettingsTests
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new
         {
             Devices = new[] { new { BaseUrl = baseUrl } }
-        }));
+        }), TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("only a scheme, host, and optional port", exception.Message);
     }
@@ -254,9 +250,9 @@ public sealed class AppSettingsTests
         var path = temporary.File("config.json");
         await File.WriteAllTextAsync(path, """
             {"Devices":[{"Name":"  Studio  ","BaseUrl":"  HTTP://Encoder.Test:80///  ","Username":"  admin  ","Password":" password "}]}
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var device = Assert.Single((await AppSettings.LoadAsync(path)).Devices);
+        var device = Assert.Single((await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken)).Devices);
 
         Assert.Equal("Studio", device.Name);
         Assert.Equal("http://encoder.test", device.BaseUrl);
@@ -271,9 +267,9 @@ public sealed class AppSettingsTests
         var path = temporary.File("config.json");
         await File.WriteAllTextAsync(path, """
             {"Devices":[{"BaseUrl":"http://ENCODER.test"},{"BaseUrl":"http://encoder.test:80/"}]}
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("configured more than once", exception.Message);
         Assert.Contains("http://encoder.test", exception.Message);
@@ -284,9 +280,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, "{\"LinkPi\":null}");
+        await File.WriteAllTextAsync(path, "{\"LinkPi\":null}", TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("LinkPi must be a JSON object", exception.Message);
     }
@@ -297,11 +293,11 @@ public sealed class AppSettingsTests
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
         const string invalidJson = "{\"Devices\":{\"BaseUrl\":\"http://encoder.test\"}}";
-        await File.WriteAllTextAsync(path, invalidJson);
+        await File.WriteAllTextAsync(path, invalidJson, TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
-        Assert.Equal(invalidJson, await File.ReadAllTextAsync(path));
+        Assert.Equal(invalidJson, await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
         Assert.Single(Directory.GetFiles(temporary.Path));
     }
 
@@ -310,9 +306,9 @@ public sealed class AppSettingsTests
     {
         using var temporary = new TemporaryDirectory();
         var path = temporary.File("config.json");
-        await File.WriteAllTextAsync(path, "{not-json");
+        await File.WriteAllTextAsync(path, "{not-json", TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAnyAsync<JsonException>(() => AppSettings.LoadAsync(path));
+        await Assert.ThrowsAnyAsync<JsonException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -335,9 +331,9 @@ public sealed class AppSettingsTests
             ]
         };
 
-        await settings.SaveAsync(path);
-        var savedText = await File.ReadAllTextAsync(path);
-        var reloaded = await AppSettings.LoadAsync(path);
+        await settings.SaveAsync(path, TestContext.Current.CancellationToken);
+        var savedText = await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken);
+        var reloaded = await AppSettings.LoadAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Contains(Environment.NewLine, savedText);
         Assert.DoesNotContain("AllowChanges", savedText, StringComparison.Ordinal);
@@ -357,15 +353,15 @@ public sealed class AppSettingsTests
         var savedPath = temporary.File("protected.json");
         await File.WriteAllTextAsync(sourcePath, """
             {"Devices":[{"BaseUrl":"http://encoder.test","Password":"legacy-secret"}]}
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var settings = await AppSettings.LoadAsync(sourcePath);
-        await settings.SaveAsync(savedPath);
-        var savedText = await File.ReadAllTextAsync(savedPath);
+        var settings = await AppSettings.LoadAsync(sourcePath, TestContext.Current.CancellationToken);
+        await settings.SaveAsync(savedPath, TestContext.Current.CancellationToken);
+        var savedText = await File.ReadAllTextAsync(savedPath, TestContext.Current.CancellationToken);
 
         Assert.Equal("legacy-secret", Assert.Single(settings.Devices).Password);
         Assert.DoesNotContain("legacy-secret", savedText, StringComparison.Ordinal);
-        Assert.Equal("legacy-secret", Assert.Single((await AppSettings.LoadAsync(savedPath)).Devices).Password);
+        Assert.Equal("legacy-secret", Assert.Single((await AppSettings.LoadAsync(savedPath, TestContext.Current.CancellationToken)).Devices).Password);
     }
 
     [Fact]
@@ -375,9 +371,9 @@ public sealed class AppSettingsTests
         var path = temporary.File("config.json");
         await File.WriteAllTextAsync(path, $$"""
             {"Devices":[{"BaseUrl":"http://encoder.test","Password":"{{CredentialProtector.Prefix}}not-base64"}]}
-            """);
+            """, TestContext.Current.CancellationToken);
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path, TestContext.Current.CancellationToken));
 
         Assert.Contains("could not be decrypted", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -405,7 +401,7 @@ public sealed class AppSettingsTests
         Directory.CreateDirectory(occupiedPath);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            new AppSettings().SaveAsync(occupiedPath));
+            new AppSettings().SaveAsync(occupiedPath, TestContext.Current.CancellationToken));
 
         Assert.Empty(Directory.GetFiles(temporary.Path, "*.tmp"));
         Assert.True(Directory.Exists(occupiedPath));

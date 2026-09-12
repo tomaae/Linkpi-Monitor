@@ -1,0 +1,11 @@
+{
+  "platformOptions": {
+    "Coverlet": {
+      "include": "[Linkpi Monitor]*",
+      "excludeByFile": "**/*.xaml.cs,**/*.xaml,**/obj/**,**/AssemblyInfo.cs",
+      "excludeByAttribute": "GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverage,ExcludeFromCodeCoverageAttribute",
+      "format": "cobertura",
+      "includeTestAssembly": false
+    }
+  }
+}

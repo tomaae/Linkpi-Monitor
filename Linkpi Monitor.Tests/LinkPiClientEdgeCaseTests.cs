@@ -57,12 +57,12 @@ public sealed class LinkPiClientEdgeCaseTests
             }
             : null;
         using var client = new LinkPiClient(TestDevices.Default, handler, TimeSpan.FromMilliseconds(100));
-        var snapshot = await client.GetSnapshotAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal(2, snapshot.Channels.Count);
         Assert.Equal("Snapshot unavailable", snapshot.Channels[0].PreviewMessage);
         Assert.Contains(handler.Requests, request => request.Path == "/snap/snap1.jpg");
         handler.Override = null;
-        await client.GetSnapshotAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        await client.GetSnapshotAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -111,13 +111,14 @@ public sealed class LinkPiClientEdgeCaseTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
         var configuration = new PushConfiguration();
         var saves = new List<Task>();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
         try
         {
-            saves.Add(Task.Run(() => client.SavePushConfigurationAsync(configuration)));
-            Assert.True(authenticationEntered.Wait(TimeSpan.FromSeconds(5)));
-            saves.Add(Task.Run(() => client.SavePushConfigurationAsync(configuration)));
-            await Task.Delay(50);
+            saves.Add(Task.Run(() => client.SavePushConfigurationAsync(configuration, cancellationToken), cancellationToken));
+            Assert.True(authenticationEntered.Wait(TimeSpan.FromSeconds(5), cancellationToken));
+            saves.Add(Task.Run(() => client.SavePushConfigurationAsync(configuration, cancellationToken), cancellationToken));
+            await Task.Delay(50, cancellationToken);
         }
         finally
         {
@@ -145,7 +146,7 @@ public sealed class LinkPiClientEdgeCaseTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration()));
+            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains("unexpected host", exception.Message);
     }
@@ -163,7 +164,7 @@ public sealed class LinkPiClientEdgeCaseTests
         };
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
-        await client.SaveChannelConfigurationAsync(0, new ChannelConfiguration());
+        await client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken);
 
         Assert.Equal(2, relayAttempts);
         Assert.Equal(2, handler.Requests.Count(request => request.Path == "/link/action.php"));
@@ -215,7 +216,7 @@ public sealed class LinkPiClientEdgeCaseTests
         using var cancellation = new CancellationTokenSource();
 
         var snapshotTask = client.GetSnapshotAsync(cancellation.Token);
-        await previewStream.ReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await previewStream.ReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => snapshotTask);

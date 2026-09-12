@@ -18,6 +18,8 @@ $publishRoot = [IO.Path]::GetFullPath((Join-Path $artifactRoot "LinkpiMonitor"))
 $stagingRoot = [IO.Path]::GetFullPath((Join-Path $artifactRoot "LinkpiMonitor.staging"))
 $archivePath = [IO.Path]::GetFullPath((Join-Path $artifactRoot "LinkpiMonitor-win-x64.zip"))
 $temporaryArchivePath = [IO.Path]::GetFullPath((Join-Path $artifactRoot "LinkpiMonitor-win-x64.pending.zip"))
+$checksumPath = [IO.Path]::GetFullPath((Join-Path $artifactRoot "LinkpiMonitor-win-x64.zip.sha256"))
+$temporaryChecksumPath = [IO.Path]::GetFullPath((Join-Path $artifactRoot "LinkpiMonitor-win-x64.zip.pending.sha256"))
 $artifactPrefix = $artifactRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) +
     [IO.Path]::DirectorySeparatorChar
 
@@ -25,10 +27,19 @@ $validatedArtifactNames = @(
     "LinkpiMonitor",
     "LinkpiMonitor.staging",
     "LinkpiMonitor-win-x64.zip",
-    "LinkpiMonitor-win-x64.pending.zip"
+    "LinkpiMonitor-win-x64.pending.zip",
+    "LinkpiMonitor-win-x64.zip.sha256",
+    "LinkpiMonitor-win-x64.zip.pending.sha256"
 )
 
-foreach ($artifactPath in @($publishRoot, $stagingRoot, $archivePath, $temporaryArchivePath)) {
+foreach ($artifactPath in @(
+    $publishRoot,
+    $stagingRoot,
+    $archivePath,
+    $temporaryArchivePath,
+    $checksumPath,
+    $temporaryChecksumPath
+)) {
     if (-not $artifactPath.StartsWith(
         $artifactPrefix,
         [StringComparison]::OrdinalIgnoreCase
@@ -154,6 +165,13 @@ if (Test-Path -LiteralPath $archivePath) {
 
 Move-Item -LiteralPath $temporaryArchivePath -Destination $archivePath
 
+$archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -LiteralPath $temporaryChecksumPath `
+    -Value "$archiveHash *$([IO.Path]::GetFileName($archivePath))" `
+    -Encoding ascii `
+    -NoNewline
+Move-Item -LiteralPath $temporaryChecksumPath -Destination $checksumPath -Force
+
 $publishRootLocked = $false
 if (Test-Path -LiteralPath $publishRoot) {
     foreach ($publishedFile in $publishedFiles) {
@@ -206,6 +224,8 @@ $packageSize = ($packagedFiles | Measure-Object -Property Length -Sum).Sum
 Write-Host "Package archive: $archivePath"
 Get-Item -LiteralPath $archivePath |
     Select-Object Name, Length
+Write-Host "SHA-256 checksum: $checksumPath"
+Get-Content -LiteralPath $checksumPath
 
 }
 finally {

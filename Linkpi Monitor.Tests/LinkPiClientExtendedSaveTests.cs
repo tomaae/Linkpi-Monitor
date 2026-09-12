@@ -25,7 +25,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
         var configuration = CompleteChannelConfiguration();
 
-        await client.SaveChannelConfigurationAsync(0, configuration);
+        await client.SaveChannelConfigurationAsync(0, configuration, TestContext.Current.CancellationToken);
 
         var channel = SavedChannels(handler)[0];
         Assert.Equal("Updated HDMI", channel.GetProperty("name").GetString());
@@ -100,7 +100,7 @@ public sealed class LinkPiClientExtendedSaveTests
             }
         };
 
-        await client.SaveChannelConfigurationAsync(1, configuration);
+        await client.SaveChannelConfigurationAsync(1, configuration, TestContext.Current.CancellationToken);
 
         var capture = SavedChannels(handler)[0].GetProperty("capture");
         Assert.Equal(JsonValueKind.String, capture.GetProperty("width").ValueKind);
@@ -137,7 +137,7 @@ public sealed class LinkPiClientExtendedSaveTests
             }
         };
 
-        await client.SaveChannelConfigurationAsync(2, configuration);
+        await client.SaveChannelConfigurationAsync(2, configuration, TestContext.Current.CancellationToken);
 
         var channel = SavedChannels(handler)[0];
         Assert.False(channel.GetProperty("cap").TryGetProperty("deinterlace", out _));
@@ -152,7 +152,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SaveChannelConfigurationAsync(99, new ChannelConfiguration()));
+            client.SaveChannelConfigurationAsync(99, new ChannelConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains("channel 99", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(handler.Requests, request => request.Path == "/link/action.php");
@@ -166,7 +166,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration()));
+            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains("configuration is invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -182,7 +182,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration()));
+            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains("invalid value", exception.Message);
     }
@@ -214,7 +214,7 @@ public sealed class LinkPiClientExtendedSaveTests
             Compatibility = "ext_header"
         });
 
-        await client.SavePushConfigurationAsync(configuration);
+        await client.SavePushConfigurationAsync(configuration, TestContext.Current.CancellationToken);
 
         var saved = SavedPush(handler);
         Assert.False(saved.GetProperty("autorun").GetBoolean());
@@ -244,7 +244,7 @@ public sealed class LinkPiClientExtendedSaveTests
             AudioSource = "close"
         });
 
-        await client.SavePushConfigurationAsync(configuration);
+        await client.SavePushConfigurationAsync(configuration, TestContext.Current.CancellationToken);
 
         var destination = SavedPush(handler).GetProperty("url")[0];
         Assert.Equal(JsonValueKind.Number, destination.GetProperty("srcV").ValueKind);
@@ -260,7 +260,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SavePushConfigurationAsync(new PushConfiguration()));
+            client.SavePushConfigurationAsync(new PushConfiguration(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SavePushConfigurationAsync(new PushConfiguration()));
+            client.SavePushConfigurationAsync(new PushConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains("rejected", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -282,8 +282,8 @@ public sealed class LinkPiClientExtendedSaveTests
         var handler = new LinkPiTestHandler { PushJson = "{}" };
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
-        await client.SavePushConfigurationAsync(new PushConfiguration());
-        await client.SavePushConfigurationAsync(new PushConfiguration());
+        await client.SavePushConfigurationAsync(new PushConfiguration(), TestContext.Current.CancellationToken);
+        await client.SavePushConfigurationAsync(new PushConfiguration(), TestContext.Current.CancellationToken);
 
         Assert.Single(handler.Requests, request => request.Path == "/link/action.php");
         Assert.Equal(2, handler.Requests.Count(request => request.RpcMethod == "push.update"));
@@ -306,7 +306,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SavePushConfigurationAsync(new PushConfiguration()));
+            client.SavePushConfigurationAsync(new PushConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains(message, exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(handler.Requests, request => request.Path == "/config/push.json");
@@ -323,7 +323,7 @@ public sealed class LinkPiClientExtendedSaveTests
         var channel = Assert.Single((await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false)).Channels);
         channel.Configuration.General.Name = "Renamed";
 
-        await client.SaveChannelConfigurationAsync(channel.Id, channel.Configuration);
+        await client.SaveChannelConfigurationAsync(channel.Id, channel.Configuration, TestContext.Current.CancellationToken);
 
         var saved = SavedChannels(handler)[0];
         Assert.False(saved.TryGetProperty("encv2", out _));
@@ -340,7 +340,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
-            client.SavePushConfigurationAsync(new PushConfiguration()));
+            client.SavePushConfigurationAsync(new PushConfiguration(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public sealed class LinkPiClientExtendedSaveTests
             ]
         };
 
-        await client.SaveHardwareConfigurationAsync(configuration);
+        await client.SaveHardwareConfigurationAsync(configuration, TestContext.Current.CancellationToken);
 
         var mix = SavedChannels(handler)[0];
         Assert.Equal("keep", mix.GetProperty("unknown").GetString());
@@ -420,7 +420,7 @@ public sealed class LinkPiClientExtendedSaveTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.SaveHardwareConfigurationAsync(new HardwareConfiguration()));
+            client.SaveHardwareConfigurationAsync(new HardwareConfiguration(), TestContext.Current.CancellationToken));
 
         Assert.Contains("mix channel", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(handler.Requests, request => request.Path == "/link/action.php");

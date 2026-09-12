@@ -33,7 +33,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: LinkpiMonitor-${{ github.ref_name }}-win-x64
-          path: artifacts/LinkpiMonitor-win-x64.zip
+          path: |
+            artifacts/LinkpiMonitor-win-x64.zip
+            artifacts/LinkpiMonitor-win-x64.zip.sha256
           if-no-files-found: error
           compression-level: 0
 
@@ -44,6 +46,7 @@ jobs:
         run: >-
           gh release create $env:GITHUB_REF_NAME
           'artifacts/LinkpiMonitor-win-x64.zip#LinkPi Monitor for Windows x64'
+          'artifacts/LinkpiMonitor-win-x64.zip.sha256#SHA-256 checksum'
           --repo 'tomaae/Linkpi-Monitor'
           --verify-tag
           --generate-notes

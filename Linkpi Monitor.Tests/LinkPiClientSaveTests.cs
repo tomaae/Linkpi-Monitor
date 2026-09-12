@@ -62,7 +62,7 @@ public sealed class LinkPiClientSaveTests
             }
         };
 
-        await client.SaveChannelConfigurationAsync(2, configuration);
+        await client.SaveChannelConfigurationAsync(2, configuration, TestContext.Current.CancellationToken);
 
         var relayRequest = Assert.Single(handler.Requests, request => request.Path == "/link/relay.php");
         using var relay = JsonDocument.Parse(relayRequest.Body);
@@ -105,7 +105,7 @@ public sealed class LinkPiClientSaveTests
             Compatibility = "ext_header"
         });
 
-        await client.SavePushConfigurationAsync(configuration);
+        await client.SavePushConfigurationAsync(configuration, TestContext.Current.CancellationToken);
 
         var rpcRequest = Assert.Single(handler.Requests, request => request.Path == "/RPC");
         using var rpc = JsonDocument.Parse(rpcRequest.Body);
@@ -182,7 +182,7 @@ public sealed class LinkPiClientSaveTests
             ]
         };
 
-        await client.SaveHardwareConfigurationAsync(configuration);
+        await client.SaveHardwareConfigurationAsync(configuration, TestContext.Current.CancellationToken);
 
         var relayRequest = Assert.Single(handler.Requests, request => request.Path == "/link/relay.php");
         using var relay = JsonDocument.Parse(relayRequest.Body);

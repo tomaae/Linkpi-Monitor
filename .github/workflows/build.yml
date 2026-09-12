@@ -34,7 +34,7 @@ jobs:
         run: dotnet test "Linkpi Monitor.slnx" --configuration Release --no-restore
 
       - name: Collect core coverage
-        run: dotnet test "Linkpi Monitor.slnx" --configuration Debug --no-restore --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory TestResults-Coverage
+        run: dotnet test "Linkpi Monitor.slnx" --configuration Debug --no-restore --coverlet --results-directory TestResults-Coverage
 
       - name: Verify core coverage
         shell: pwsh

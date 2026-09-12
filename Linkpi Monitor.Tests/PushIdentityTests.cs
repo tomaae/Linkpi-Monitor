@@ -19,7 +19,7 @@ public sealed class PushIdentityTests
         configuration.Destinations.RemoveAt(0);
         configuration.Destinations[0].Name = "Renamed B";
         configuration.Destinations.Add(new PushDestinationConfiguration { Name = "New" });
-        await client.SavePushConfigurationAsync(configuration);
+        await client.SavePushConfigurationAsync(configuration, TestContext.Current.CancellationToken);
         using var rpc = JsonDocument.Parse(Assert.Single(handler.Requests, r => r.RpcMethod == "push.update").Body);
         using var saved = JsonDocument.Parse(rpc.RootElement.GetProperty("params")[0].GetString()!);
         var destinations = saved.RootElement.GetProperty("url");
@@ -36,7 +36,7 @@ public sealed class PushIdentityTests
         using var client = new LinkPiClient(TestDevices.Default, handler);
         var configuration = (await client.GetSnapshotAsync(CancellationToken.None)).PushConfiguration;
         handler.PushJson = """{"url":[{"des":"B"},{"des":"A"}]}""";
-        await Assert.ThrowsAsync<InvalidOperationException>(() => client.SavePushConfigurationAsync(configuration));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.SavePushConfigurationAsync(configuration, TestContext.Current.CancellationToken));
         Assert.DoesNotContain(handler.Requests, r => r.RpcMethod == "push.update");
     }
 }
