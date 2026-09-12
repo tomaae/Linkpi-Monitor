@@ -110,4 +110,48 @@ public sealed class ConfigurationModelTests
         Assert.Contains(videoOutput.Types, option => option.Value == "dvi");
         Assert.Contains(videoOutput.ColorMatrices, option => option.Value == "709_601");
     }
+
+    [Fact]
+    public void PushEditableCopyPreservesIdentityWithoutMutatingDashboardState()
+    {
+        var original = new PushConfiguration
+        {
+            OriginalDestinationsJson = "[{\"des\":\"Primary\"}]",
+            Autorun = true,
+            VideoSources = [new SelectionOption("0", "HDMI")]
+        };
+        original.Destinations.Add(new PushDestinationConfiguration
+        {
+            OriginalIndex = 0,
+            Name = "Primary",
+            Url = "rtmp://example.test/live"
+        });
+
+        var copy = original.CreateEditableCopy();
+        copy.Autorun = false;
+        copy.Destinations[0].Name = "Changed";
+        copy.Destinations.Add(new PushDestinationConfiguration());
+
+        Assert.True(original.Autorun);
+        Assert.Single(original.Destinations);
+        Assert.Equal("Primary", original.Destinations[0].Name);
+        Assert.Equal(0, copy.Destinations[0].OriginalIndex);
+        Assert.Equal(original.OriginalDestinationsJson, copy.OriginalDestinationsJson);
+    }
+
+    [Fact]
+    public void HardwareEditableCopyDoesNotMutateDashboardState()
+    {
+        var original = new HardwareConfiguration
+        {
+            HasVideoOutput = true,
+            VideoOutputs = [new VideoOutputConfiguration { Name = "HDMI output", Luma = "50" }]
+        };
+
+        var copy = original.CreateEditableCopy();
+        copy.VideoOutputs[0].Luma = "75";
+
+        Assert.Equal("50", original.VideoOutputs[0].Luma);
+        Assert.Equal("75", copy.VideoOutputs[0].Luma);
+    }
 }

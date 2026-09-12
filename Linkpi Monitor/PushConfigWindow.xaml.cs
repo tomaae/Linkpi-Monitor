@@ -1,4 +1,6 @@
 using System.Windows;
+using System.ComponentModel;
+using System.Text.Json;
 
 namespace Linkpi_Monitor;
 
@@ -6,6 +8,9 @@ public partial class PushConfigWindow : Window
 {
     private readonly PushConfiguration _configuration;
     private readonly LinkPiClient _client;
+    private readonly string _baseline;
+    private bool _isSaving;
+    private bool _saved;
 
     public PushConfigWindow(
         PushConfiguration configuration,
@@ -13,10 +18,14 @@ public partial class PushConfigWindow : Window
         PushDestinationConfiguration? selectedDestination = null)
     {
         InitializeComponent();
-        _configuration = configuration;
+        _configuration = configuration.CreateEditableCopy();
         _client = client;
-        DataContext = configuration;
-        DestinationTabs.SelectedItem = selectedDestination ?? configuration.Destinations.FirstOrDefault();
+        _baseline = JsonSerializer.Serialize(_configuration);
+        DataContext = _configuration;
+        DestinationTabs.SelectedItem = selectedDestination is null
+            ? _configuration.Destinations.FirstOrDefault()
+            : _configuration.Destinations.FirstOrDefault(destination =>
+                destination.OriginalIndex == selectedDestination.OriginalIndex);
     }
 
     private void AddDestinationButton_Click(object sender, RoutedEventArgs e)
@@ -63,11 +72,15 @@ public partial class PushConfigWindow : Window
         }
 
         SaveButton.IsEnabled = false;
+        AddButton.IsEnabled = false;
+        RemoveButton.IsEnabled = false;
+        CloseButton.IsEnabled = false;
+        _isSaving = true;
         try
         {
             await _client.SavePushConfigurationAsync(_configuration);
-            MessageBox.Show(this, "Push configuration was saved. Publishing state was not changed.",
-                "Configuration saved", MessageBoxButton.OK, MessageBoxImage.Information);
+            _saved = true;
+            _isSaving = false;
             DialogResult = true;
         }
         catch (Exception exception)
@@ -77,9 +90,33 @@ public partial class PushConfigWindow : Window
         }
         finally
         {
-            SaveButton.IsEnabled = true;
+            _isSaving = false;
+            if (IsVisible)
+            {
+                SaveButton.IsEnabled = true;
+                AddButton.IsEnabled = true;
+                RemoveButton.IsEnabled = true;
+                CloseButton.IsEnabled = true;
+            }
         }
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_isSaving)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (_saved || JsonSerializer.Serialize(_configuration) == _baseline)
+        {
+            return;
+        }
+
+        e.Cancel = MessageBox.Show(this, "Discard the unsaved Push configuration changes?", "Unsaved changes",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes;
+    }
 }

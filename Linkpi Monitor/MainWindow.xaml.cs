@@ -26,6 +26,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private readonly DispatcherTimer _refreshTimer = new();
     private Task _activeRefresh = Task.CompletedTask;
+    private Task _activeSave = Task.CompletedTask;
     private bool _isClosing;
     private bool _closeReady;
     private AppSettings? _settings;
@@ -33,6 +34,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private CancellationTokenSource? _refreshCancellation;
     private bool _isLoaded;
     private bool _suppressDeviceSelection;
+    private bool _suppressTabSelection;
+    private DeviceSettings? _activeDevice;
+    private TabItem? _selectedMainTab;
     private string _connectionStatus = "Not connected";
     private Brush _connectionBrush = OfflineBrush;
     private string _cpuDisplay = "—";
@@ -183,6 +187,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        if (!HardwareConfigurationEditor.ConfirmDiscardChanges(this))
+        {
+            _suppressDeviceSelection = true;
+            DevicePicker.SelectedItem = _activeDevice;
+            _suppressDeviceSelection = false;
+            UpdateDeviceActionState();
+            return;
+        }
+
         if (DevicePicker.SelectedItem is not DeviceSettings device)
         {
             ShowNoDeviceState();
@@ -195,8 +208,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async Task ActivateDeviceAsync(DeviceSettings device)
     {
         _refreshCancellation?.Cancel();
+        await _activeRefresh;
         _client?.Dispose();
         _client = new LinkPiClient(device);
+        _activeDevice = device;
         Channels.Clear();
         PushDestinations.Clear();
         SetPushConfiguration(null);
@@ -210,6 +225,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void AddDeviceButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!HardwareConfigurationEditor.ConfirmDiscardChanges(this)) return;
         var editor = new DeviceEditorWindow { Owner = this };
         if (editor.ShowDialog() != true || editor.Device is not { } device)
         {
@@ -231,6 +247,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void EditDeviceButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!HardwareConfigurationEditor.ConfirmDiscardChanges(this)) return;
         var selectedIndex = DevicePicker.SelectedIndex;
         if (selectedIndex < 0 || DevicePicker.SelectedItem is not DeviceSettings selectedDevice)
         {
@@ -259,6 +276,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void DeleteDeviceButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!HardwareConfigurationEditor.ConfirmDiscardChanges(this)) return;
         var selectedIndex = DevicePicker.SelectedIndex;
         if (selectedIndex < 0 || DevicePicker.SelectedItem is not DeviceSettings selectedDevice)
         {
@@ -364,6 +382,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _refreshCancellation?.Cancel();
         _client?.Dispose();
         _client = null;
+        _activeDevice = null;
         Channels.Clear();
         PushDestinations.Clear();
         SetPushConfiguration(null);
@@ -511,7 +530,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _pushConfiguration = configuration;
     }
 
-    private async Task SaveHardwareConfigurationAsync(HardwareConfiguration configuration)
+    private Task SaveHardwareConfigurationAsync(HardwareConfiguration configuration)
+    {
+        if (!_activeSave.IsCompleted)
+        {
+            throw new InvalidOperationException("A configuration save is already in progress.");
+        }
+
+        return _activeSave = SaveHardwareConfigurationCoreAsync(configuration);
+    }
+
+    private async Task SaveHardwareConfigurationCoreAsync(HardwareConfiguration configuration)
     {
         if (_client is null)
         {
@@ -521,14 +550,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await _client.SaveHardwareConfigurationAsync(configuration);
         _holdHardwareConfiguration = false;
         await RefreshAsync();
-        _holdHardwareConfiguration = MainTabs.SelectedItem is TabItem { Header: "Hardware" };
+        _holdHardwareConfiguration = ReferenceEquals(MainTabs.SelectedItem, HardwareTab);
     }
 
     private async void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (e.Source == MainTabs)
         {
-            _holdHardwareConfiguration = MainTabs.SelectedItem is TabItem { Header: "Hardware" };
+            var selectedTab = MainTabs.SelectedItem as TabItem;
+            if (!_suppressTabSelection && ReferenceEquals(_selectedMainTab, HardwareTab) &&
+                !ReferenceEquals(selectedTab, HardwareTab) &&
+                !HardwareConfigurationEditor.ConfirmDiscardChanges(this))
+            {
+                _suppressTabSelection = true;
+                MainTabs.SelectedItem = HardwareTab;
+                _suppressTabSelection = false;
+                return;
+            }
+
+            _selectedMainTab = selectedTab;
+            _holdHardwareConfiguration = ReferenceEquals(selectedTab, HardwareTab);
             await RefreshForPreviewActivityAsync();
         }
     }
@@ -551,11 +592,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_closeReady) return;
         e.Cancel = true;
         if (_isClosing) return;
+        if (!HardwareConfigurationEditor.ConfirmDiscardChanges(this)) return;
         _isClosing = true;
         IsEnabled = false;
         _refreshTimer.Stop();
         _refreshCancellation?.Cancel();
         await _activeRefresh;
+        await _activeSave;
         // Owned windows do not receive Closing when WPF closes their owner.
         await Task.WhenAll(OwnedWindows.OfType<WatchWindow>().Select(window => window.PrepareToCloseAsync()));
         _client?.Dispose();

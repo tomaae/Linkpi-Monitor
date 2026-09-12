@@ -1,20 +1,47 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Text.Json;
 
 namespace Linkpi_Monitor;
 
 public partial class HardwareEditor : UserControl
 {
+    private string _baseline = string.Empty;
+
     public HardwareEditor()
     {
         InitializeComponent();
     }
 
     public Func<HardwareConfiguration, Task>? SaveAsync { get; set; }
+    public bool IsSaving { get; private set; }
+    public bool HasUnsavedChanges => EditorRoot.DataContext is HardwareConfiguration configuration &&
+        JsonSerializer.Serialize(configuration) != _baseline;
+
+    public bool ConfirmDiscardChanges(Window owner)
+    {
+        if (IsSaving)
+        {
+            MessageBox.Show(owner, "Wait for the hardware configuration save to finish before navigating away.",
+                "Save in progress", MessageBoxButton.OK, MessageBoxImage.Information);
+            return false;
+        }
+        return !HasUnsavedChanges || MessageBox.Show(owner,
+            "Discard the unsaved hardware configuration changes?", "Unsaved changes",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    }
+
+    private void UserControl_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is not HardwareConfiguration configuration) return;
+        var editable = configuration.CreateEditableCopy();
+        EditorRoot.DataContext = editable;
+        _baseline = JsonSerializer.Serialize(editable);
+    }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (SaveAsync is null || DataContext is not HardwareConfiguration configuration)
+        if (SaveAsync is null || EditorRoot.DataContext is not HardwareConfiguration configuration)
         {
             return;
         }
@@ -40,11 +67,11 @@ public partial class HardwareEditor : UserControl
         }
 
         SaveButton.IsEnabled = false;
+        IsSaving = true;
         try
         {
             await SaveAsync(configuration);
-            MessageBox.Show(owner, "Hardware configuration was saved.", "Configuration saved",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            _baseline = JsonSerializer.Serialize(EditorRoot.DataContext);
         }
         catch (Exception exception)
         {
@@ -53,6 +80,7 @@ public partial class HardwareEditor : UserControl
         }
         finally
         {
+            IsSaving = false;
             SaveButton.IsEnabled = true;
         }
     }

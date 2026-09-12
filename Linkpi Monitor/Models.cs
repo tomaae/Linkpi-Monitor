@@ -135,6 +135,24 @@ public sealed class PushConfiguration : ConfigurationSection
     public IReadOnlyList<SelectionOption> VideoSources { get; init; } = [];
     public IReadOnlyList<SelectionOption> AudioSources { get; init; } = [];
     public IReadOnlyList<SelectionOption> Types { get; init; } = [];
+
+    internal PushConfiguration CreateEditableCopy()
+    {
+        var copy = new PushConfiguration
+        {
+            OriginalDestinationsJson = OriginalDestinationsJson,
+            Autorun = Autorun,
+            AutorunStoredAsString = AutorunStoredAsString,
+            VideoSources = VideoSources,
+            AudioSources = AudioSources,
+            Types = Types
+        };
+        foreach (var destination in Destinations)
+        {
+            copy.Destinations.Add(destination.CreateEditableCopy());
+        }
+        return copy;
+    }
 }
 
 public sealed class PushDestinationConfiguration : ConfigurationSection
@@ -169,6 +187,22 @@ public sealed class PushDestinationConfiguration : ConfigurationSection
         new(string.Empty, "Normal"),
         new("ext_header", "Enhanced RTMP")
     ];
+
+    internal PushDestinationConfiguration CreateEditableCopy() => new()
+    {
+        OriginalIndex = OriginalIndex,
+        Name = Name,
+        Type = Type,
+        VideoSource = VideoSource,
+        AudioSource = AudioSource,
+        Stream = Stream,
+        Url = Url,
+        Compatibility = Compatibility,
+        Enabled = Enabled,
+        VideoSources = VideoSources,
+        AudioSources = AudioSources,
+        Types = Types
+    };
 }
 
 public sealed class HardwareConfiguration
@@ -186,6 +220,10 @@ public sealed class HardwareConfiguration
     public Visibility LineAudioVisibility => HasLineAudio ? Visibility.Visible : Visibility.Collapsed;
     public Visibility VideoOutputVisibility => HasVideoOutput ? Visibility.Visible : Visibility.Collapsed;
     public bool HasHardwareControls => HasLineAudio || HasUsbAudioInput || HasVideoOutput;
+
+    internal HardwareConfiguration CreateEditableCopy() =>
+        System.Text.Json.JsonSerializer.Deserialize<HardwareConfiguration>(
+            System.Text.Json.JsonSerializer.Serialize(this))!;
 }
 
 public sealed class AudioInputConfiguration

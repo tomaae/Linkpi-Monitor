@@ -197,7 +197,7 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Hardware" Visibility="{Binding HardwareVisibility}">
+                <TabItem x:Name="HardwareTab" Header="Hardware" Visibility="{Binding HardwareVisibility}">
                     <local:HardwareEditor x:Name="HardwareConfigurationEditor" DataContext="{Binding Hardware}" />
                 </TabItem>
             </TabControl>

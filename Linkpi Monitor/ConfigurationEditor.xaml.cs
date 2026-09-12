@@ -11,6 +11,7 @@ public partial class ConfigurationEditor : UserControl
     }
 
     public Func<ChannelConfiguration, Task>? SaveAsync { get; set; }
+    public bool IsSaving { get; private set; }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
@@ -40,11 +41,12 @@ public partial class ConfigurationEditor : UserControl
         }
 
         SaveButton.IsEnabled = false;
+        CloseButton.IsEnabled = false;
+        IsSaving = true;
         try
         {
             await SaveAsync(channel.Configuration);
-            MessageBox.Show(owner, "Channel configuration was saved.", "Configuration saved",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            IsSaving = false;
             if (owner is not null)
             {
                 owner.DialogResult = true;
@@ -57,7 +59,12 @@ public partial class ConfigurationEditor : UserControl
         }
         finally
         {
-            SaveButton.IsEnabled = true;
+            IsSaving = false;
+            if (IsVisible)
+            {
+                SaveButton.IsEnabled = true;
+                CloseButton.IsEnabled = true;
+            }
         }
     }
 
