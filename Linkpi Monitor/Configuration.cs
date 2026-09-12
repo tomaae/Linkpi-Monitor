@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Linkpi_Monitor;
 
@@ -10,10 +11,31 @@ public sealed class AppSettings
     public List<DeviceSettings> Devices { get; init; } = [];
     public int RefreshIntervalSeconds { get; init; } = 5;
 
-    public static string ConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
+    [JsonIgnore]
+    public string ConfigurationNotice { get; internal set; } = string.Empty;
 
-    public static Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default) =>
-        LoadAsync(ConfigPath, cancellationToken);
+    public static string ConfigPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Linkpi Monitor",
+        "config.json");
+
+    public static string LegacyConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
+
+    public static async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(ConfigPath) &&
+            !string.Equals(ConfigPath, LegacyConfigPath, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(LegacyConfigPath))
+        {
+            var migratedSettings = await LoadAsync(LegacyConfigPath, cancellationToken);
+            await migratedSettings.SaveAsync(ConfigPath, cancellationToken);
+            migratedSettings.ConfigurationNotice =
+                $"Your configuration was moved to {ConfigPath}. The original file was left unchanged.";
+            return migratedSettings;
+        }
+
+        return await LoadAsync(ConfigPath, cancellationToken);
+    }
 
     internal static async Task<AppSettings> LoadAsync(
         string configPath,
@@ -24,16 +46,7 @@ public sealed class AppSettings
             var defaultSettings = new AppSettings
             {
                 RefreshIntervalSeconds = 5,
-                Devices =
-                [
-                    new DeviceSettings
-                    {
-                        Name = "LinkPi",
-                        BaseUrl = "http://192.168.1.100",
-                        Username = "admin",
-                        Password = string.Empty
-                    }
-                ]
+                Devices = []
             };
             await defaultSettings.SaveAsync(configPath, cancellationToken);
             return defaultSettings;
@@ -98,10 +111,23 @@ public sealed class AppSettings
 
     internal async Task SaveAsync(string configPath, CancellationToken cancellationToken = default)
     {
+        var directory = Path.GetDirectoryName(configPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
         var temporaryPath = $"{configPath}.{Guid.NewGuid():N}.tmp";
         try
         {
-            var json = JsonSerializer.Serialize(this, SerializerOptions);
+            var persistedSettings = new PersistedSettings(
+                Devices.Select(device => new PersistedDevice(
+                    device.Name,
+                    device.BaseUrl,
+                    device.Username,
+                    CredentialProtector.Protect(device.Password))).ToList(),
+                RefreshIntervalSeconds);
+            var json = JsonSerializer.Serialize(persistedSettings, SerializerOptions);
             await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
             File.Move(temporaryPath, configPath, true);
         }
@@ -139,7 +165,7 @@ public sealed class AppSettings
             Name = name,
             BaseUrl = normalizedBaseUrl,
             Username = ReadString(element, "Username", location).Trim(),
-            Password = ReadString(element, "Password", location)
+            Password = CredentialProtector.Unprotect(ReadString(element, "Password", location))
         };
     }
 
@@ -205,6 +231,16 @@ public sealed class AppSettings
 
     private static InvalidDataException InvalidConfiguration(string message) =>
         new($"Invalid config.json: {message}");
+
+    private sealed record PersistedSettings(
+        List<PersistedDevice> Devices,
+        int RefreshIntervalSeconds);
+
+    private sealed record PersistedDevice(
+        string Name,
+        string BaseUrl,
+        string Username,
+        string Password);
 
 }
 

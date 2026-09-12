@@ -1,4 +1,6 @@
 ﻿using System.Text;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -48,6 +50,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _deviceModelDisplay = "No device selected";
     private string _lastUpdatedDisplay = "Never updated";
     private bool _holdHardwareConfiguration;
+    private bool _configurationRecoveryAvailable;
 
     public MainWindow()
     {
@@ -134,6 +137,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ? Visibility.Collapsed
         : Visibility.Visible;
 
+    public Visibility ConfigurationRecoveryVisibility => _configurationRecoveryAvailable
+        ? Visibility.Visible
+        : Visibility.Collapsed;
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -144,6 +151,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 _settings = await AppSettings.LoadAsync();
                 if (_isClosing) return;
+                if (!string.IsNullOrWhiteSpace(_settings.ConfigurationNotice))
+                {
+                    MessageBox.Show(
+                        this,
+                        _settings.ConfigurationNotice,
+                        "Configuration moved",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
             }
             catch (Exception exception)
             {
@@ -487,10 +503,67 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ShowConfigurationError(Exception exception)
     {
+        _configurationRecoveryAvailable = true;
+        OnPropertyChanged(nameof(ConfigurationRecoveryVisibility));
         DeviceModelDisplay = "Configuration unavailable";
         ConnectionStatus = "Configuration error";
         ConnectionBrush = OfflineBrush;
-        ErrorMessage = $"Could not load config.json: {exception.Message}";
+        ErrorMessage = $"Could not load {AppSettings.ConfigPath}: {exception.Message}";
+    }
+
+    private void OpenConfigurationButton_Click(object sender, RoutedEventArgs e)
+    {
+        var directory = System.IO.Path.GetDirectoryName(AppSettings.ConfigPath);
+        if (string.IsNullOrEmpty(directory)) return;
+
+        Directory.CreateDirectory(directory);
+        var arguments = File.Exists(AppSettings.ConfigPath)
+            ? $"/select,\"{AppSettings.ConfigPath}\""
+            : $"\"{directory}\"";
+        Process.Start(new ProcessStartInfo("explorer.exe", arguments) { UseShellExecute = true });
+    }
+
+    private async void ResetConfigurationButton_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            this,
+            "Back up the invalid configuration and start with an empty device list?",
+            "Reset configuration",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            string? backupPath = null;
+            if (File.Exists(AppSettings.ConfigPath))
+            {
+                backupPath = $"{AppSettings.ConfigPath}.invalid-{DateTime.Now:yyyyMMdd-HHmmss}.bak";
+                File.Move(AppSettings.ConfigPath, backupPath);
+            }
+
+            _settings = new AppSettings { Devices = [], RefreshIntervalSeconds = 5 };
+            await _settings.SaveAsync();
+            _configurationRecoveryAvailable = false;
+            OnPropertyChanged(nameof(ConfigurationRecoveryVisibility));
+            _refreshTimer.Interval = TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds);
+            _isLoaded = true;
+            ShowNoDeviceState();
+            _refreshTimer.Start();
+            ErrorMessage = backupPath is null
+                ? "A new empty configuration was created. Add a device to get started."
+                : $"A new empty configuration was created. The invalid file was backed up to {backupPath}.";
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                $"Could not reset the configuration.\n\n{exception.Message}",
+                "Reset failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private void WatchButton_Click(object sender, RoutedEventArgs e)

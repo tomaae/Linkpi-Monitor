@@ -38,6 +38,19 @@ public partial class DeviceEditorWindow : Window
         }
 
         var parsedUri = new Uri(baseUrl, UriKind.Absolute);
+        if (parsedUri.Scheme == Uri.UriSchemeHttp &&
+            (!string.IsNullOrWhiteSpace(UsernameTextBox.Text) || !string.IsNullOrEmpty(PasswordInput.Password)))
+        {
+            var answer = MessageBox.Show(
+                this,
+                "This device uses HTTP, so its credentials and device data are sent without transport encryption. Continue only on a trusted network.",
+                "Unencrypted connection",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes) return;
+        }
+
         var name = NameTextBox.Text.Trim();
         Device = new DeviceSettings
         {

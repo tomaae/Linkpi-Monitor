@@ -61,7 +61,17 @@
             </Grid.RowDefinitions>
             <Border Grid.Row="0" Background="#241F12" BorderBrush="#5B4818" BorderThickness="0,0,0,1"
                     Padding="24,10" Visibility="{Binding ErrorVisibility}">
-                <TextBlock Text="{Binding ErrorMessage}" Foreground="#FFD978" TextWrapping="Wrap" />
+                <DockPanel LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="16,0,0,0"
+                                Visibility="{Binding ConfigurationRecoveryVisibility}">
+                        <Button Content="Open file" Margin="0,0,8,0" Click="OpenConfigurationButton_Click"
+                                ToolTip="Show the invalid configuration file in File Explorer." />
+                        <Button Content="Reset safely" Click="ResetConfigurationButton_Click"
+                                ToolTip="Back up the invalid file and create an empty configuration." />
+                    </StackPanel>
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#FFD978" TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+                </DockPanel>
             </Border>
             <Grid Grid.Row="1" Margin="24,20,24,8">
                 <Grid.ColumnDefinitions>

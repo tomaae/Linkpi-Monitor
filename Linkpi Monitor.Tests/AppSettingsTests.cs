@@ -14,12 +14,8 @@ public sealed class AppSettingsTests
 
         var settings = await AppSettings.LoadAsync(path);
 
-        var device = Assert.Single(settings.Devices);
         Assert.Equal(5, settings.RefreshIntervalSeconds);
-        Assert.Equal("LinkPi", device.Name);
-        Assert.Equal("http://192.168.1.100", device.BaseUrl);
-        Assert.Equal("admin", device.Username);
-        Assert.Empty(device.Password);
+        Assert.Empty(settings.Devices);
         Assert.True(File.Exists(path));
     }
 
@@ -346,9 +342,44 @@ public sealed class AppSettingsTests
         Assert.Contains(Environment.NewLine, savedText);
         Assert.DoesNotContain("AllowChanges", savedText, StringComparison.Ordinal);
         Assert.DoesNotContain("CanSaveChanges", savedText, StringComparison.Ordinal);
+        Assert.DoesNotContain("local-secret", savedText, StringComparison.Ordinal);
+        Assert.Contains(CredentialProtector.Prefix, savedText, StringComparison.Ordinal);
         Assert.Equal(17, reloaded.RefreshIntervalSeconds);
         Assert.Equal(settings.Devices, reloaded.Devices);
         Assert.Empty(Directory.GetFiles(temporary.Path, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task PlainTextPasswordIsProtectedOnNextSave()
+    {
+        using var temporary = new TemporaryDirectory();
+        var sourcePath = temporary.File("plain.json");
+        var savedPath = temporary.File("protected.json");
+        await File.WriteAllTextAsync(sourcePath, """
+            {"Devices":[{"BaseUrl":"http://encoder.test","Password":"legacy-secret"}]}
+            """);
+
+        var settings = await AppSettings.LoadAsync(sourcePath);
+        await settings.SaveAsync(savedPath);
+        var savedText = await File.ReadAllTextAsync(savedPath);
+
+        Assert.Equal("legacy-secret", Assert.Single(settings.Devices).Password);
+        Assert.DoesNotContain("legacy-secret", savedText, StringComparison.Ordinal);
+        Assert.Equal("legacy-secret", Assert.Single((await AppSettings.LoadAsync(savedPath)).Devices).Password);
+    }
+
+    [Fact]
+    public async Task InvalidProtectedPasswordReportsUsefulError()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, $$"""
+            {"Devices":[{"BaseUrl":"http://encoder.test","Password":"{{CredentialProtector.Prefix}}not-base64"}]}
+            """);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() => AppSettings.LoadAsync(path));
+
+        Assert.Contains("could not be decrypted", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

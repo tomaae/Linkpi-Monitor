@@ -32,7 +32,7 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,20">
             <TextBlock x:Name="HeadingText" Text="Add device" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="Stored only in the local, git-excluded config.json. This does not modify the LinkPi device."
+            <TextBlock Text="The password is encrypted for your Windows account. This does not modify the LinkPi device."
                        Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" TextWrapping="Wrap" />
         </StackPanel>
 
