@@ -20,6 +20,14 @@ public partial class ConfigurationEditor : UserControl
         }
 
         var owner = Window.GetWindow(this);
+        var validationErrors = ConfigurationValidator.Validate(channel.Configuration);
+        if (validationErrors.Count > 0)
+        {
+            MessageBox.Show(owner, ConfigurationValidator.Format(validationErrors), "Check configuration",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         if (MessageBox.Show(
                 owner,
                 $"Apply the displayed configuration to channel {channel.Id} on the selected LinkPi?",

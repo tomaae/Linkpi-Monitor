@@ -20,6 +20,14 @@ public partial class HardwareEditor : UserControl
         }
 
         var owner = Window.GetWindow(this);
+        var validationErrors = ConfigurationValidator.Validate(configuration);
+        if (validationErrors.Count > 0)
+        {
+            MessageBox.Show(owner, ConfigurationValidator.Format(validationErrors), "Check configuration",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         if (MessageBox.Show(
                 owner,
                 "Apply the displayed physical audio and video-output configuration to the selected LinkPi?",

@@ -151,6 +151,25 @@ public sealed class LinkPiClientEdgeCaseTests
     }
 
     [Fact]
+    public async Task ExpiredSaveSessionAuthenticatesAgainAndRetriesOnce()
+    {
+        var relayAttempts = 0;
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = "[{\"id\":0}]",
+            Override = request => request.Path == "/link/relay.php" && Interlocked.Increment(ref relayAttempts) == 1
+                ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                : null
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        await client.SaveChannelConfigurationAsync(0, new ChannelConfiguration());
+
+        Assert.Equal(2, relayAttempts);
+        Assert.Equal(2, handler.Requests.Count(request => request.Path == "/link/action.php"));
+    }
+
+    [Fact]
     public async Task CancellationDuringPreviewCycleIsPropagated()
     {
         var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"enable\":true}]");

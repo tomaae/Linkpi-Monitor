@@ -295,6 +295,7 @@ public sealed class LinkPiClientExtendedSaveTests
     [Theory]
     [InlineData("http://linkpi.test/login.php", "authentication failed")]
     [InlineData("http://unexpected.test/home", "unexpected host")]
+    [InlineData("https://linkpi.test/home", "unexpected host")]
     public async Task AuthenticationRejectsLoginRedirectAndCrossHostRedirect(string resultUri, string message)
     {
         var handler = new LinkPiTestHandler
@@ -309,6 +310,27 @@ public sealed class LinkPiClientExtendedSaveTests
 
         Assert.Contains(message, exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(handler.Requests, request => request.Path == "/config/push.json");
+    }
+
+    [Fact]
+    public async Task ParsedChannelSaveDoesNotMaterializeUnsupportedSections()
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = "[{\"id\":5,\"type\":\"vi\",\"name\":\"Input\",\"encv\":{},\"enca\":{},\"stream\":{}}]"
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+        var channel = Assert.Single((await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false)).Channels);
+        channel.Configuration.General.Name = "Renamed";
+
+        await client.SaveChannelConfigurationAsync(channel.Id, channel.Configuration);
+
+        var saved = SavedChannels(handler)[0];
+        Assert.False(saved.TryGetProperty("encv2", out _));
+        Assert.False(saved.TryGetProperty("stream2", out _));
+        Assert.False(saved.TryGetProperty("hls", out _));
+        Assert.False(saved.TryGetProperty("ts", out _));
+        Assert.False(saved.TryGetProperty("ndi", out _));
     }
 
     [Fact]

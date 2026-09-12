@@ -43,6 +43,14 @@ public partial class PushConfigWindow : Window
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
+        var validationErrors = ConfigurationValidator.Validate(_configuration);
+        if (validationErrors.Count > 0)
+        {
+            MessageBox.Show(this, ConfigurationValidator.Format(validationErrors), "Check configuration",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         if (MessageBox.Show(
                 this,
                 "Save the displayed Push configuration? This does not start or stop publishing.",

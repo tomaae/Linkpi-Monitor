@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Media;
@@ -12,6 +13,7 @@ namespace Linkpi_Monitor;
 public sealed class LinkPiClient : IDisposable
 {
     internal const int MaximumPreviewBytes = 10 * 1024 * 1024;
+    internal const long MaximumJsonBytes = 16 * 1024 * 1024;
     private static readonly Brush OnlineBrush = Freeze("#39D98A");
     private static readonly Brush WarningBrush = Freeze("#FFB547");
     private static readonly Brush OfflineBrush = Freeze("#77808C");
@@ -19,6 +21,8 @@ public sealed class LinkPiClient : IDisposable
     private readonly DeviceSettings _device;
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _previewTimeout;
+    private readonly TimeSpan _requestTimeout;
+    private readonly TimeSpan _saveTimeout;
     private string? _channelConfigurationKey;
     private readonly Dictionary<int, ChannelConfiguration> _channelConfigurations = [];
     private readonly SemaphoreSlim _authenticationGate = new(1, 1);
@@ -29,19 +33,29 @@ public sealed class LinkPiClient : IDisposable
         : this(device, new HttpClientHandler
         {
             CookieContainer = new System.Net.CookieContainer(),
-            AllowAutoRedirect = true
+            // Configuration writes can contain credentials and stream keys. Redirects are
+            // deliberately handled as errors so a device cannot forward those requests.
+            AllowAutoRedirect = false
         })
     {
     }
 
-    internal LinkPiClient(DeviceSettings device, HttpMessageHandler handler, TimeSpan? previewTimeout = null)
+    internal LinkPiClient(
+        DeviceSettings device,
+        HttpMessageHandler handler,
+        TimeSpan? previewTimeout = null,
+        TimeSpan? requestTimeout = null,
+        TimeSpan? saveTimeout = null)
     {
         _device = device;
         _previewTimeout = previewTimeout ?? TimeSpan.FromSeconds(6);
+        _requestTimeout = requestTimeout ?? TimeSpan.FromSeconds(6);
+        _saveTimeout = saveTimeout ?? TimeSpan.FromSeconds(30);
         _httpClient = new HttpClient(handler)
         {
             BaseAddress = new Uri(device.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute),
-            Timeout = TimeSpan.FromSeconds(6)
+            Timeout = Timeout.InfiniteTimeSpan,
+            MaxResponseContentBufferSize = MaximumJsonBytes
         };
     }
 
@@ -60,6 +74,7 @@ public sealed class LinkPiClient : IDisposable
                 return;
             }
 
+            using var deadline = CreateDeadline(cancellationToken, _saveTimeout);
             using var response = await _httpClient.PostAsync(
                 "link/action.php",
                 new FormUrlEncodedContent(new Dictionary<string, string>
@@ -67,13 +82,14 @@ public sealed class LinkPiClient : IDisposable
                     ["username"] = _device.Username,
                     ["password"] = _device.Password
                 }),
-                cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            ValidateResponseHost(response);
+                deadline.Token).ConfigureAwait(false);
+            ValidateResponseOrigin(response);
             if (response.RequestMessage?.RequestUri?.AbsolutePath.EndsWith("login.php", StringComparison.OrdinalIgnoreCase) == true)
             {
                 throw new InvalidOperationException("LinkPi authentication failed.");
             }
+            RejectRedirect(response);
+            response.EnsureSuccessStatusCode();
 
             _authenticated = true;
         }
@@ -83,13 +99,32 @@ public sealed class LinkPiClient : IDisposable
         }
     }
 
-    private void ValidateResponseHost(HttpResponseMessage response)
+    private void ValidateResponseOrigin(HttpResponseMessage response)
     {
+        var expected = _httpClient.BaseAddress!;
         if (response.RequestMessage?.RequestUri is not { } uri ||
-            !uri.Host.Equals(_httpClient.BaseAddress!.Host, StringComparison.OrdinalIgnoreCase))
+            !uri.Scheme.Equals(expected.Scheme, StringComparison.OrdinalIgnoreCase) ||
+            !uri.Host.Equals(expected.Host, StringComparison.OrdinalIgnoreCase) ||
+            uri.Port != expected.Port)
         {
-            throw new InvalidOperationException("The LinkPi redirected the request to an unexpected host.");
+            throw new InvalidOperationException(
+                "The LinkPi redirected the request to an unexpected host, scheme, or port.");
         }
+    }
+
+    private static void RejectRedirect(HttpResponseMessage response)
+    {
+        if ((int)response.StatusCode is >= 300 and < 400)
+        {
+            throw new InvalidOperationException("The LinkPi returned an unexpected redirect.");
+        }
+    }
+
+    private static CancellationTokenSource CreateDeadline(CancellationToken cancellationToken, TimeSpan timeout)
+    {
+        var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        return deadline;
     }
 
     public async Task SaveChannelConfigurationAsync(
@@ -102,7 +137,10 @@ public sealed class LinkPiClient : IDisposable
 
         channel["name"] = configuration.General.Name;
         channel["enable"] = configuration.MainEncoder.Enabled;
-        channel["enable2"] = configuration.SubEncoder.Enabled;
+        if (configuration.HasSubEncoder)
+        {
+            channel["enable2"] = configuration.SubEncoder.Enabled;
+        }
 
         if (configuration.Decode.IsNetworkSource)
         {
@@ -141,23 +179,44 @@ public sealed class LinkPiClient : IDisposable
         }
 
         ApplyEncoder(EnsureObject(channel, "encv"), configuration.MainEncoder);
-        ApplyEncoder(EnsureObject(channel, "encv2"), configuration.SubEncoder);
+        if (configuration.HasSubEncoder)
+        {
+            ApplyEncoder(EnsureObject(channel, "encv2"), configuration.SubEncoder);
+        }
         ApplyAudioEncoder(EnsureObject(channel, "enca"), configuration.Audio);
         ApplyStreamOutput(EnsureObject(channel, "stream"), configuration.MainStream);
-        ApplyStreamOutput(EnsureObject(channel, "stream2"), configuration.SubStream);
-        ApplyHls(EnsureObject(channel, "hls"), configuration.Hls);
-        ApplyTransport(EnsureObject(channel, "ts"), configuration.Transport);
-        ApplyNdi(EnsureObject(channel, "ndi"), configuration.Ndi);
+        if (configuration.HasSubStream)
+        {
+            ApplyStreamOutput(EnsureObject(channel, "stream2"), configuration.SubStream);
+        }
+        if (configuration.HasHls)
+        {
+            ApplyHls(EnsureObject(channel, "hls"), configuration.Hls);
+        }
+        if (configuration.HasTransport)
+        {
+            ApplyTransport(EnsureObject(channel, "ts"), configuration.Transport);
+        }
+        if (configuration.HasNdi)
+        {
+            ApplyNdi(EnsureObject(channel, "ndi"), configuration.Ndi);
+        }
 
         await SaveDefaultConfigurationAsync(root, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task SavePushConfigurationAsync(
+    public Task SavePushConfigurationAsync(
         PushConfiguration configuration,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ExecuteAuthenticatedSaveAsync(
+            token => SavePushConfigurationCoreAsync(configuration, token),
+            cancellationToken);
+
+    private async Task SavePushConfigurationCoreAsync(
+        PushConfiguration configuration,
+        CancellationToken cancellationToken)
     {
-        await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
-        var current = await GetJsonAsync("config/push.json", cancellationToken).ConfigureAwait(false);
+        var current = await GetJsonAsync("config/push.json", cancellationToken, _saveTimeout).ConfigureAwait(false);
         var root = JsonNode.Parse(current.GetRawText()) as JsonObject
             ?? throw new InvalidOperationException("The LinkPi Push configuration is invalid.");
         root["autorun"] = configuration.AutorunStoredAsString
@@ -194,7 +253,8 @@ public sealed class LinkPiClient : IDisposable
             "RPC",
             "push.update",
             [root.ToJsonString(new JsonSerializerOptions { WriteIndented = true })],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            _saveTimeout).ConfigureAwait(false);
         if (result.ValueKind != JsonValueKind.True)
         {
             throw new InvalidOperationException("The LinkPi rejected the Push configuration.");
@@ -233,26 +293,64 @@ public sealed class LinkPiClient : IDisposable
 
     private async Task<JsonArray> GetMutableDefaultConfigurationAsync(CancellationToken cancellationToken)
     {
-        var current = await GetJsonAsync("config/config.json", cancellationToken).ConfigureAwait(false);
+        var current = await GetJsonAsync("config/config.json", cancellationToken, _saveTimeout).ConfigureAwait(false);
         return JsonNode.Parse(current.GetRawText()) as JsonArray
             ?? throw new InvalidOperationException("The LinkPi channel configuration is invalid.");
     }
 
-    private async Task SaveDefaultConfigurationAsync(JsonArray root, CancellationToken cancellationToken)
+    private Task SaveDefaultConfigurationAsync(JsonArray root, CancellationToken cancellationToken) =>
+        ExecuteAuthenticatedSaveAsync(token => SaveDefaultConfigurationCoreAsync(root, token), cancellationToken);
+
+    private async Task SaveDefaultConfigurationCoreAsync(JsonArray root, CancellationToken cancellationToken)
     {
-        await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
+        using var deadline = CreateDeadline(cancellationToken, _saveTimeout);
         using var response = await _httpClient.PostAsJsonAsync(
             "link/relay.php",
             new { url = "/conf/updateDefaultConf", data = root },
-            cancellationToken).ConfigureAwait(false);
+            deadline.Token).ConfigureAwait(false);
+        ValidateResponseOrigin(response);
+        ThrowIfAuthenticationExpired(response);
+        RejectRedirect(response);
         response.EnsureSuccessStatusCode();
-        ValidateResponseHost(response);
-        var result = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken)
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: deadline.Token)
             .ConfigureAwait(false);
         if (!GetString(result, "status").Equals("success", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 $"The LinkPi rejected the configuration: {GetString(result, "msg", "unknown error")}");
+        }
+    }
+
+    private async Task ExecuteAuthenticatedSaveAsync(
+        Func<CancellationToken, Task> save,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await save(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (AuthenticationExpiredException) when (attempt == 0)
+            {
+                _authenticated = false;
+            }
+        }
+    }
+
+    private static void ThrowIfAuthenticationExpired(HttpResponseMessage response)
+    {
+        var location = response.Headers.Location;
+        var locationPath = location is null
+            ? string.Empty
+            : location.IsAbsoluteUri ? location.AbsolutePath : location.OriginalString;
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ||
+            locationPath.EndsWith("login.php", StringComparison.OrdinalIgnoreCase) ||
+            response.RequestMessage?.RequestUri?.AbsolutePath.EndsWith("login.php", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            throw new AuthenticationExpiredException();
         }
     }
 
@@ -291,25 +389,35 @@ public sealed class LinkPiClient : IDisposable
         };
     }
 
-    private async Task<JsonElement> GetJsonAsync(string relativeUrl, CancellationToken cancellationToken)
+    private async Task<JsonElement> GetJsonAsync(
+        string relativeUrl,
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null)
     {
-        using var response = await _httpClient.GetAsync(relativeUrl, cancellationToken);
+        using var deadline = CreateDeadline(cancellationToken, timeout ?? _requestTimeout);
+        using var response = await _httpClient.GetAsync(relativeUrl, deadline.Token);
+        ValidateResponseOrigin(response);
+        ThrowIfAuthenticationExpired(response);
+        RejectRedirect(response);
         response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: deadline.Token);
         return document.RootElement.Clone();
     }
 
     private async Task<JsonElement> GetOptionalJsonAsync(string relativeUrl, CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.GetAsync(relativeUrl, cancellationToken).ConfigureAwait(false);
+        using var deadline = CreateDeadline(cancellationToken, _requestTimeout);
+        using var response = await _httpClient.GetAsync(relativeUrl, deadline.Token).ConfigureAwait(false);
+        ValidateResponseOrigin(response);
+        RejectRedirect(response);
         if (!response.IsSuccessStatusCode)
         {
             return default;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+        await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: deadline.Token)
             .ConfigureAwait(false);
         return document.RootElement.Clone();
     }
@@ -324,7 +432,8 @@ public sealed class LinkPiClient : IDisposable
         string endpoint,
         string method,
         IReadOnlyList<object?> parameters,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null)
     {
         var request = new
         {
@@ -334,10 +443,14 @@ public sealed class LinkPiClient : IDisposable
             id = Interlocked.Increment(ref _requestId)
         };
 
-        using var response = await _httpClient.PostAsJsonAsync(endpoint, request, cancellationToken);
+        using var deadline = CreateDeadline(cancellationToken, timeout ?? _requestTimeout);
+        using var response = await _httpClient.PostAsJsonAsync(endpoint, request, deadline.Token);
+        ValidateResponseOrigin(response);
+        ThrowIfAuthenticationExpired(response);
+        RejectRedirect(response);
         response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: deadline.Token);
         var root = document.RootElement;
         if (root.TryGetProperty("error", out var error))
         {
@@ -719,7 +832,12 @@ public sealed class LinkPiClient : IDisposable
             SubStream = ParseStreamOutput(GetObject(channel, "stream2")),
             Hls = ParseHls(GetObject(channel, "hls")),
             Transport = ParseTransportStream(GetObject(channel, "ts")),
-            Ndi = ParseNdi(GetObject(channel, "ndi"))
+            Ndi = ParseNdi(GetObject(channel, "ndi")),
+            HasSubEncoder = HasProperty(channel, "encv2"),
+            HasSubStream = HasProperty(channel, "stream2"),
+            HasHls = HasProperty(channel, "hls"),
+            HasTransport = HasProperty(channel, "ts"),
+            HasNdi = HasProperty(channel, "ndi")
         };
     }
 
@@ -1499,5 +1617,10 @@ public sealed class LinkPiClient : IDisposable
     {
         _authenticationGate.Dispose();
         _httpClient.Dispose();
+    }
+
+    private sealed class AuthenticationExpiredException : Exception
+    {
+        public AuthenticationExpiredException() : base("The LinkPi authentication session expired.") { }
     }
 }

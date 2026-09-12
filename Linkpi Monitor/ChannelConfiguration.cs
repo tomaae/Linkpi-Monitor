@@ -21,6 +21,11 @@ public sealed class ChannelConfiguration
     public HlsConfiguration Hls { get; init; } = new();
     public TransportStreamConfiguration Transport { get; init; } = new();
     public NdiConfiguration Ndi { get; init; } = new();
+    public bool HasSubEncoder { get; init; } = true;
+    public bool HasSubStream { get; init; } = true;
+    public bool HasHls { get; init; } = true;
+    public bool HasTransport { get; init; } = true;
+    public bool HasNdi { get; init; } = true;
 }
 
 public sealed class GeneralChannelConfiguration
