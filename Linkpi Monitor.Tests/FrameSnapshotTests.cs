@@ -110,4 +110,59 @@ public sealed class FrameSnapshotTests
         }
         finally { directory.Delete(recursive: true); }
     }
+
+    [Fact]
+    public async Task CaptureFailureDoesNotHideOriginalErrorWhenTemporaryFileIsLocked()
+    {
+        FileStream? lockStream = null;
+        string? temporaryPath = null;
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                FrameSnapshot.CaptureAsync(path =>
+                {
+                    temporaryPath = path;
+                    File.WriteAllBytes(path, TestDevices.OnePixelPng);
+                    lockStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    return false;
+                }, CancellationToken.None));
+
+            Assert.Contains("No video frame", exception.Message, StringComparison.Ordinal);
+            Assert.True(File.Exists(temporaryPath));
+        }
+        finally
+        {
+            lockStream?.Dispose();
+            if (temporaryPath is not null)
+            {
+                File.Delete(temporaryPath);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CaptureFailureDoesNotHideOriginalErrorWhenTemporaryPathBecameDirectory()
+    {
+        string? temporaryPath = null;
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                FrameSnapshot.CaptureAsync(path =>
+                {
+                    temporaryPath = path;
+                    Directory.CreateDirectory(path);
+                    return false;
+                }, CancellationToken.None));
+
+            Assert.Contains("No video frame", exception.Message, StringComparison.Ordinal);
+            Assert.True(Directory.Exists(temporaryPath));
+        }
+        finally
+        {
+            if (temporaryPath is not null && Directory.Exists(temporaryPath))
+            {
+                Directory.Delete(temporaryPath);
+            }
+        }
+    }
 }

@@ -21,20 +21,26 @@ public sealed class AppSettings
 
     public static string LegacyConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
 
-    public static async Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default)
+    public static Task<AppSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+        LoadFromLocationsAsync(ConfigPath, LegacyConfigPath, cancellationToken);
+
+    internal static async Task<AppSettings> LoadFromLocationsAsync(
+        string configPath,
+        string legacyConfigPath,
+        CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(ConfigPath) &&
-            !string.Equals(ConfigPath, LegacyConfigPath, StringComparison.OrdinalIgnoreCase) &&
-            File.Exists(LegacyConfigPath))
+        if (!File.Exists(configPath) &&
+            !string.Equals(configPath, legacyConfigPath, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(legacyConfigPath))
         {
-            var migratedSettings = await LoadAsync(LegacyConfigPath, cancellationToken);
-            await migratedSettings.SaveAsync(ConfigPath, cancellationToken);
+            var migratedSettings = await LoadAsync(legacyConfigPath, cancellationToken);
+            await migratedSettings.SaveAsync(configPath, cancellationToken);
             migratedSettings.ConfigurationNotice =
-                $"Your configuration was moved to {ConfigPath}. The original file was left unchanged.";
+                $"Your configuration was moved to {configPath}. The original file was left unchanged.";
             return migratedSettings;
         }
 
-        return await LoadAsync(ConfigPath, cancellationToken);
+        return await LoadAsync(configPath, cancellationToken);
     }
 
     internal static async Task<AppSettings> LoadAsync(
@@ -190,7 +196,7 @@ public sealed class AppSettings
             throw InvalidConfiguration($"{location}.{propertyName} must be a string.");
         }
 
-        var value = property.GetString() ?? string.Empty;
+        var value = property.GetString()!;
         if (required && string.IsNullOrWhiteSpace(value))
         {
             throw InvalidConfiguration($"{location}.{propertyName} cannot be empty.");

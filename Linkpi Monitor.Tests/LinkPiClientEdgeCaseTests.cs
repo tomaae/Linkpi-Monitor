@@ -329,6 +329,173 @@ public sealed class LinkPiClientEdgeCaseTests
             client.GetSnapshotAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task SameOriginHttpRedirectIsRejectedInsteadOfFollowed()
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = "[{\"id\":0}]",
+            Override = request => request.Path == "/link/relay.php"
+                ? new HttpResponseMessage(HttpStatusCode.Found)
+                {
+                    Headers = { Location = new Uri("/login", UriKind.Relative) }
+                }
+                : null
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken));
+
+        Assert.Contains("unexpected redirect", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(handler.Requests, request => request.Path == "/login");
+    }
+
+    [Theory]
+    [InlineData("login.php", false)]
+    [InlineData("http://linkpi.test/login.php", true)]
+    public async Task ExpiredSessionLocationSupportsRelativeAndAbsoluteLoginUris(string location, bool absolute)
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = "[{\"id\":0}]",
+            Override = request => request.Path == "/link/relay.php"
+                ? UnauthorizedWithLocation(new Uri(location, absolute ? UriKind.Absolute : UriKind.Relative))
+                : null
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, handler.Requests.Count(request => request.Path == "/link/action.php"));
+    }
+
+    [Fact]
+    public async Task PartialSnapshotWarningsDistinguishTimeoutsAndHttpFailures()
+    {
+        var handler = SnapshotHandler("[]");
+        handler.Override = request =>
+        {
+            if (request.RpcMethod == "enc.getSysState")
+            {
+                throw new TaskCanceledException("The operation timed out.");
+            }
+
+            return request.Path == "/config/push.json"
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : null;
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false);
+
+        Assert.Contains("System metrics unavailable: request timed out", snapshot.Warnings);
+        Assert.Contains("Push configuration unavailable: HTTP 503", snapshot.Warnings);
+        Assert.False(snapshot.HasSystemMetrics);
+    }
+
+    [Fact]
+    public async Task SnapshotHandlesOnlySubOutputsSourceFramerateAndMalformedScalars()
+    {
+        var handler = SnapshotHandler("""
+            [{
+              "id":"bad","type":"","name":"","enable":true,
+              "encv":{"codec":"h264","width":"bad","height":null,"framerate":-1,"bitrate":"bad"},
+              "enca":{"codec":"aac","bitrate":"bad","samplerate":"bad"},
+              "stream":{"http":"not-a-boolean","hls":1.5},
+              "stream2":{"rtsp":true}
+            }]
+            """);
+        handler.PushJson = """
+            {"url":[{"des":"Push","enable":true,"srcV":"0","path":"rtmp://push.test/live"}]}
+            """;
+        handler.RpcResults["push.getState"] = "{\"status\":[{\"duration\":\"bad\"}]}";
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false);
+        var channel = Assert.Single(snapshot.Channels);
+
+        Assert.Equal("Stream", channel.SourceType);
+        Assert.Contains("source fps", channel.VideoSummary, StringComparison.Ordinal);
+        Assert.Equal("Sub: RTSP", channel.OutputsSummary);
+        Assert.Equal("—", Assert.Single(snapshot.PushDestinations).Duration);
+    }
+
+    [Fact]
+    public async Task PreviewWithoutContentTypeIsRejected()
+    {
+        var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"enable\":true}]");
+        handler.Override = request => request.Path.StartsWith("/snap/", StringComparison.Ordinal)
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(TestDevices.OnePixelPng) }
+            : null;
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var channel = Assert.Single((await client.GetSnapshotAsync(CancellationToken.None)).Channels);
+
+        Assert.Equal("Snapshot unavailable", channel.PreviewMessage);
+    }
+
+    [Fact]
+    public void ExplicitTimeoutConstructorValuesAreAcceptedWithoutNetworkAccess()
+    {
+        using var client = new LinkPiClient(
+            TestDevices.Default,
+            new LinkPiTestHandler(),
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(3));
+    }
+
+    [Fact]
+    public async Task SaveRejectsChannelDocumentsWhoseIdsAreMissing()
+    {
+        var handler = new LinkPiTestHandler { ConfigJson = "[{}]" };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.SaveChannelConfigurationAsync(7, new ChannelConfiguration(), TestContext.Current.CancellationToken));
+
+        Assert.Contains("channel 7 was not found", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(handler.Requests, request => request.Path == "/link/action.php");
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{\"url\":42}")]
+    public async Task InvalidPushDestinationCollectionsAndRuntimeStatusUseEmptyFallbacks(string pushJson)
+    {
+        var handler = SnapshotHandler("[]");
+        handler.PushJson = pushJson;
+        handler.RpcResults["push.getState"] = "{\"status\":42}";
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false);
+
+        Assert.Empty(snapshot.PushConfiguration.Destinations);
+        Assert.Empty(snapshot.PushDestinations);
+    }
+
+    [Fact]
+    public async Task NonObjectPrimaryVideoOutputIsIgnored()
+    {
+        var handler = SnapshotHandler("[{\"id\":8,\"type\":\"mix\",\"output\":null}]");
+        handler.HardwareJson = "{\"function\":{\"videoOut\":true}}";
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var hardware = (await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false)).Hardware;
+
+        Assert.False(hardware.HasVideoOutput);
+        Assert.Empty(hardware.VideoOutputs);
+    }
+
+    private static HttpResponseMessage UnauthorizedWithLocation(Uri location)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        response.Headers.Location = location;
+        return response;
+    }
+
     private static LinkPiTestHandler SnapshotHandler(string channels) => new()
     {
         ConfigJson = channels,

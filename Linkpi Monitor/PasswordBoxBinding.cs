@@ -44,7 +44,7 @@ public static class PasswordBoxBinding
 
         if ((bool)passwordBox.GetValue(IsUpdatingProperty)) return;
 
-        var password = args.NewValue as string ?? string.Empty;
+        var password = (string)args.NewValue;
         if (passwordBox.Password == password) return;
 
         passwordBox.SetValue(IsUpdatingProperty, true);

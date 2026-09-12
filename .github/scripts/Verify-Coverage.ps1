@@ -3,9 +3,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ResultsDirectory,
 
-    [double]$MinimumLineCoverage = 90,
+    [double]$MinimumLineCoverage = 99,
 
-    [double]$MinimumBranchCoverage = 80
+    [double]$MinimumBranchCoverage = 98
 )
 
 $report = Get-ChildItem -LiteralPath $ResultsDirectory -Filter 'coverage.cobertura*.xml' -Recurse |

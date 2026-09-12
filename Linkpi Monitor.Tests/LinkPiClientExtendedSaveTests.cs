@@ -239,6 +239,7 @@ public sealed class LinkPiClientExtendedSaveTests
         var configuration = new PushConfiguration();
         configuration.Destinations.Add(new PushDestinationConfiguration
         {
+            OriginalIndex = -1,
             Name = "New",
             VideoSource = "8",
             AudioSource = "close"
@@ -251,6 +252,29 @@ public sealed class LinkPiClientExtendedSaveTests
         Assert.Equal(8, destination.GetProperty("srcV").GetInt32());
         Assert.Equal(JsonValueKind.String, destination.GetProperty("srcA").ValueKind);
         Assert.Equal("close", destination.GetProperty("srcA").GetString());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"url\":[42]}")]
+    public async Task SavePushReplacesMissingOrMalformedOriginalDestination(string pushJson)
+    {
+        var handler = new LinkPiTestHandler { PushJson = pushJson };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+        var configuration = new PushConfiguration();
+        configuration.Destinations.Add(new PushDestinationConfiguration
+        {
+            OriginalIndex = 0,
+            Name = "Recovered",
+            VideoSource = "1",
+            AudioSource = "close"
+        });
+
+        await client.SavePushConfigurationAsync(configuration, TestContext.Current.CancellationToken);
+
+        var destination = SavedPush(handler).GetProperty("url")[0];
+        Assert.Equal(JsonValueKind.Object, destination.ValueKind);
+        Assert.Equal("Recovered", destination.GetProperty("des").GetString());
     }
 
     [Fact]
@@ -424,6 +448,73 @@ public sealed class LinkPiClientExtendedSaveTests
 
         Assert.Contains("mix channel", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(handler.Requests, request => request.Path == "/link/action.php");
+    }
+
+    [Fact]
+    public async Task SaveEncoderPreservesOptionalFirmwareFieldsWhenEditorValuesHaveNoComponents()
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = """
+                [{"id":0,"type":"vi","encv":{"width":1920,"height":1080,"profile":"firmware","syncTSMode":"firmware"}}]
+                """
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+        var configuration = new ChannelConfiguration
+        {
+            MainEncoder = new EncoderConfiguration
+            {
+                VideoSize = "automatic",
+                VideoFormat = "h264",
+                TimestampMode = "not-a-boolean"
+            }
+        };
+
+        await client.SaveChannelConfigurationAsync(0, configuration, TestContext.Current.CancellationToken);
+
+        var encoder = SavedChannels(handler)[0].GetProperty("encv");
+        Assert.Equal(1920, encoder.GetProperty("width").GetInt32());
+        Assert.Equal(1080, encoder.GetProperty("height").GetInt32());
+        Assert.Equal("h264", encoder.GetProperty("codec").GetString());
+        Assert.Equal("firmware", encoder.GetProperty("profile").GetString());
+        Assert.False(encoder.GetProperty("syncTS").GetBoolean());
+        Assert.Equal("firmware", encoder.GetProperty("syncTSMode").GetString());
+    }
+
+    [Fact]
+    public async Task SaveLineAudioPreservesOptionalNameAndWritesNumericSource()
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = """
+                [{"id":8,"type":"mix","inputLine":{"name":"Firmware name"},"outputLine":{"src":"old"}}]
+                """
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+        var configuration = new HardwareConfiguration
+        {
+            HasLineAudio = true,
+            LineAudioInput = new AudioInputConfiguration
+            {
+                HasName = false,
+                Name = "Ignored editor name",
+                NoiseReduction = "0",
+                NoiseReductionLevel = "8",
+                Gain = "0"
+            },
+            LineAudioOutput = new AudioOutputConfiguration
+            {
+                Source = "2",
+                SourceStoredAsString = false,
+                Gain = "0"
+            }
+        };
+
+        await client.SaveHardwareConfigurationAsync(configuration, TestContext.Current.CancellationToken);
+
+        var mix = SavedChannels(handler)[0];
+        Assert.Equal("Firmware name", mix.GetProperty("inputLine").GetProperty("name").GetString());
+        Assert.Equal(2, mix.GetProperty("outputLine").GetProperty("src").GetInt32());
     }
 
     private static ChannelConfiguration CompleteChannelConfiguration() => new()

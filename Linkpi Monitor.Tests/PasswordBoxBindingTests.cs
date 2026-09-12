@@ -1,5 +1,6 @@
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows;
 using Linkpi_Monitor;
 using Xunit;
 
@@ -22,6 +23,17 @@ public sealed class PasswordBoxBindingTests
         passwordBox.Password = "changed-secret";
 
         Assert.Equal("changed-secret", model.Password);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task AttachedPropertyAccessorsAlsoWorkOnNonPasswordObjects() => WpfTestHost.RunAsync(() =>
+    {
+        var target = new DependencyObject();
+
+        PasswordBoxBinding.SetPassword(target, "stored-secret");
+
+        Assert.Equal("stored-secret", PasswordBoxBinding.GetPassword(target));
         return Task.CompletedTask;
     });
 }

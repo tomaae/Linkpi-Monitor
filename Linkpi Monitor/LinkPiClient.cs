@@ -325,19 +325,19 @@ public sealed class LinkPiClient : IDisposable
         Func<CancellationToken, Task> save,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < 2; attempt++)
+        await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await save(cancellationToken).ConfigureAwait(false);
-                return;
-            }
-            catch (AuthenticationExpiredException) when (attempt == 0)
-            {
-                _authenticated = false;
-            }
+            await save(cancellationToken).ConfigureAwait(false);
+            return;
         }
+        catch (AuthenticationExpiredException)
+        {
+            _authenticated = false;
+        }
+
+        await EnsureAuthenticatedAsync(cancellationToken).ConfigureAwait(false);
+        await save(cancellationToken).ConfigureAwait(false);
     }
 
     private static void ThrowIfAuthenticationExpired(HttpResponseMessage response)
@@ -590,7 +590,7 @@ public sealed class LinkPiClient : IDisposable
         target["Iqp"] = NumberOrString(target, "Iqp", source.FixedIQp);
         target["Pqp"] = NumberOrString(target, "Pqp", source.FixedPQp);
         var timestamp = source.TimestampMode.Split(',', 2);
-        target["syncTS"] = timestamp.Length > 0 && bool.TryParse(timestamp[0], out var sync) && sync;
+        target["syncTS"] = bool.TryParse(timestamp[0], out var sync) && sync;
         if (timestamp.Length == 2)
         {
             target["syncTSMode"] = timestamp[1];
@@ -1567,9 +1567,6 @@ public sealed class LinkPiClient : IDisposable
     {
         "vi" => "HDMI input",
         "usb" => "USB camera",
-        "file" => "File source",
-        "colorkey" => "Color key",
-        "image" => "Image source",
         "mix" => "Mix output",
         "net" => "Network decoder",
         _ => string.IsNullOrWhiteSpace(configuredType) ? "Stream" : configuredType
@@ -1619,7 +1616,7 @@ public sealed class LinkPiClient : IDisposable
             return fallback;
         }
 
-        return property.ValueKind == JsonValueKind.String ? property.GetString() ?? fallback : property.ToString();
+        return property.ValueKind == JsonValueKind.String ? property.GetString()! : property.ToString();
     }
 
     private static int GetInt(JsonElement element, string propertyName, int fallback = 0)

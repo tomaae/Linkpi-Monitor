@@ -43,6 +43,8 @@ public sealed class LinkPiClientSaveTests
                 MinimumDelay = "650",
                 DecodeVideo = true,
                 DecodeAudio = true,
+                HasDeinterlace = true,
+                Deinterlace = true,
                 Rotate = "90",
                 CropLeft = "4",
                 CropTop = "6",

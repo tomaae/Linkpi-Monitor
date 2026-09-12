@@ -69,6 +69,23 @@ public sealed class ConfigurationModelTests
 
     [Theory]
     [InlineData(false, false, false)]
+    [InlineData(true, true, true)]
+    public void OptionalChannelSectionVisibilityIsCapabilityDriven(bool hls, bool transport, bool ndi)
+    {
+        var configuration = new ChannelConfiguration
+        {
+            HasHls = hls,
+            HasTransport = transport,
+            HasNdi = ndi
+        };
+
+        Assert.Equal(hls ? Visibility.Visible : Visibility.Collapsed, configuration.HlsVisibility);
+        Assert.Equal(transport ? Visibility.Visible : Visibility.Collapsed, configuration.TransportVisibility);
+        Assert.Equal(ndi ? Visibility.Visible : Visibility.Collapsed, configuration.NdiVisibility);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
     [InlineData(true, false, true)]
     [InlineData(false, true, true)]
     [InlineData(true, true, true)]

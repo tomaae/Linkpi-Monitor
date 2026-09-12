@@ -379,6 +379,93 @@ public sealed class AppSettingsTests
     }
 
     [Fact]
+    public async Task LocationRoutingCreatesNewConfigurationWhenNeitherLocationExists()
+    {
+        using var temporary = new TemporaryDirectory();
+        var currentPath = temporary.File("current/config.json");
+        var legacyPath = temporary.File("legacy/config.json");
+
+        var settings = await AppSettings.LoadFromLocationsAsync(
+            currentPath,
+            legacyPath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(settings.Devices);
+        Assert.Equal(5, settings.RefreshIntervalSeconds);
+        Assert.True(File.Exists(currentPath));
+        Assert.False(File.Exists(legacyPath));
+        Assert.Empty(settings.ConfigurationNotice);
+    }
+
+    [Fact]
+    public async Task LocationRoutingMigratesLegacyConfigurationWithoutChangingOriginal()
+    {
+        using var temporary = new TemporaryDirectory();
+        var currentPath = temporary.File("current/config.json");
+        var legacyPath = temporary.File("legacy/config.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
+        const string legacyJson =
+            "{\"RefreshIntervalSeconds\":9,\"Devices\":[{\"Name\":\"Legacy\",\"BaseUrl\":\"http://legacy.test\",\"Password\":\"secret\"}]}";
+        await File.WriteAllTextAsync(legacyPath, legacyJson, TestContext.Current.CancellationToken);
+
+        var settings = await AppSettings.LoadFromLocationsAsync(
+            currentPath,
+            legacyPath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(9, settings.RefreshIntervalSeconds);
+        Assert.Equal("Legacy", Assert.Single(settings.Devices).Name);
+        Assert.Equal(legacyJson, await File.ReadAllTextAsync(legacyPath, TestContext.Current.CancellationToken));
+        Assert.Contains(currentPath, settings.ConfigurationNotice, StringComparison.Ordinal);
+        Assert.True(File.Exists(currentPath));
+        Assert.DoesNotContain("secret", await File.ReadAllTextAsync(currentPath, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LocationRoutingPrefersExistingCurrentConfiguration()
+    {
+        using var temporary = new TemporaryDirectory();
+        var currentPath = temporary.File("current.json");
+        var legacyPath = temporary.File("legacy.json");
+        await File.WriteAllTextAsync(currentPath, "{\"RefreshIntervalSeconds\":7,\"Devices\":[]}", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(legacyPath, "{\"RefreshIntervalSeconds\":11,\"Devices\":[]}", TestContext.Current.CancellationToken);
+
+        var settings = await AppSettings.LoadFromLocationsAsync(
+            currentPath,
+            legacyPath,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(7, settings.RefreshIntervalSeconds);
+        Assert.Empty(settings.ConfigurationNotice);
+    }
+
+    [Fact]
+    public async Task LocationRoutingDoesNotTreatSamePathAsMigration()
+    {
+        using var temporary = new TemporaryDirectory();
+        var path = temporary.File("config.json");
+        await File.WriteAllTextAsync(path, "{\"Devices\":[]}", TestContext.Current.CancellationToken);
+
+        var settings = await AppSettings.LoadFromLocationsAsync(
+            path,
+            path.ToUpperInvariant(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(settings.Devices);
+        Assert.Empty(settings.ConfigurationNotice);
+    }
+
+    [Fact]
+    public void DefaultPathsAndEmptyCredentialsAreWellDefined()
+    {
+        Assert.EndsWith(Path.Combine("Linkpi Monitor", "config.json"), AppSettings.ConfigPath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Path.Combine(AppContext.BaseDirectory, "config.json"), AppSettings.LegacyConfigPath);
+        Assert.Equal(string.Empty, CredentialProtector.Protect(string.Empty));
+        Assert.Equal(string.Empty, CredentialProtector.Unprotect(string.Empty));
+        Assert.Equal("plain", CredentialProtector.Unprotect("plain"));
+    }
+
+    [Fact]
     public async Task PreCancelledSaveDoesNotLeaveTemporaryFile()
     {
         using var temporary = new TemporaryDirectory();
