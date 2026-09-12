@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 
 namespace Linkpi_Monitor;
 
@@ -26,6 +27,9 @@ public sealed class ChannelConfiguration
     public bool HasHls { get; init; } = true;
     public bool HasTransport { get; init; } = true;
     public bool HasNdi { get; init; } = true;
+    public Visibility HlsVisibility => HasHls ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TransportVisibility => HasTransport ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility NdiVisibility => HasNdi ? Visibility.Visible : Visibility.Collapsed;
 }
 
 public sealed class GeneralChannelConfiguration

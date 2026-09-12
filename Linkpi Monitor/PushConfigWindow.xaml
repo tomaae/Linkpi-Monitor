@@ -1,7 +1,7 @@
 <Window x:Class="Linkpi_Monitor.PushConfigWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Push configuration" Icon="App.ico" Width="980" Height="720" MinWidth="820" MinHeight="580"
+        Title="Push configuration" Icon="App.ico" Width="980" Height="720" MinWidth="720" MinHeight="580"
         Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
         Closing="Window_Closing">
     <Window.Resources>
@@ -32,7 +32,7 @@
 
         <StackPanel>
             <TextBlock Text="Push configuration" FontSize="27" FontWeight="SemiBold" />
-            <TextBlock Text="Inspect and arrange publishing targets. Changes remain local until saving is implemented."
+            <TextBlock Text="Inspect, arrange, and save publishing targets. Saving does not start or stop publishing."
                        Foreground="{StaticResource MutedTextBrush}" Margin="0,5,0,0" />
         </StackPanel>
 
@@ -47,7 +47,8 @@
             </Grid>
         </Border>
 
-        <TabControl x:Name="DestinationTabs" Grid.Row="2" ItemsSource="{Binding Destinations}">
+        <TabControl x:Name="DestinationTabs" Grid.Row="2" ItemsSource="{Binding Destinations}"
+                    SelectionChanged="DestinationTabs_SelectionChanged">
             <TabControl.ItemContainerStyle>
                 <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
                     <Setter Property="Header" Value="{Binding Name}" />
@@ -79,12 +80,29 @@
                 </DataTemplate>
             </TabControl.ContentTemplate>
         </TabControl>
+        <Border Grid.Row="2" Padding="32" IsHitTestVisible="False">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource CardStyle}">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasItems, ElementName=DestinationTabs}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="No publishing targets" FontSize="21" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="Choose Add destination to create the first target."
+                           Foreground="{StaticResource MutedTextBrush}" Margin="0,7,0,0" />
+            </StackPanel>
+        </Border>
 
         <Grid Grid.Row="3" Margin="0,18,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <Button x:Name="AddButton" Grid.Column="0" Content="Add destination" Click="AddDestinationButton_Click" />
             <Button x:Name="RemoveButton" Grid.Column="2" Content="Remove destination" Click="RemoveDestinationButton_Click" />
-            <Button x:Name="SaveButton" Grid.Column="4" Content="Save changes" Click="SaveButton_Click" />
+            <Button x:Name="SaveButton" Grid.Column="4" Content="Save changes" Style="{StaticResource PrimaryButton}" Click="SaveButton_Click" />
             <Button x:Name="CloseButton" Grid.Column="6" Content="Cancel" Click="CloseButton_Click" />
         </Grid>
     </Grid>

@@ -1,6 +1,7 @@
 <UserControl x:Class="Linkpi_Monitor.ConfigurationEditor"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Linkpi_Monitor">
     <UserControl.Resources>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
@@ -14,6 +15,13 @@
             <Setter Property="MinHeight" Value="35" />
         </Style>
         <Style x:Key="ConfigComboBox" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="MinHeight" Value="35" />
+        </Style>
+        <Style x:Key="ConfigPasswordBox" TargetType="PasswordBox">
+            <Setter Property="Foreground" Value="#11161C" />
+            <Setter Property="Background" Value="#F2F5F7" />
+            <Setter Property="Padding" Value="9,7" />
             <Setter Property="Margin" Value="0,0,12,12" />
             <Setter Property="MinHeight" Value="35" />
         </Style>
@@ -37,7 +45,7 @@
                     <StackPanel><TextBlock Text="VIDEO SIZE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding VideoSizes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding VideoSize}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                     <StackPanel><TextBlock Text="CODEC / PROFILE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding VideoFormats}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding VideoFormat}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                     <StackPanel><TextBlock Text="RATE CONTROL" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding RateControls}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding RateControl}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
-                    <StackPanel><TextBlock Text="BITRATE (KB/S)" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Bitrates}" IsEditable="True" Text="{Binding Bitrate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                    <StackPanel><TextBlock Text="BITRATE (KBIT/S)" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Bitrates}" IsEditable="True" Text="{Binding Bitrate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                     <StackPanel><TextBlock Text="FRAMERATE (-1 = SOURCE)" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Framerates}" IsEditable="True" Text="{Binding Framerate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                     <StackPanel><TextBlock Text="GOP (SECONDS)" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Gops}" IsEditable="True" Text="{Binding Gop}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                 </UniformGrid>
@@ -76,7 +84,7 @@
                     <Expander.Header><TextBlock Text="RTSP" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header>
                     <UniformGrid Columns="2" Margin="0,12,0,0">
                         <StackPanel><TextBlock Text="USERNAME" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Rtsp.Username}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
-                        <StackPanel><TextBlock Text="PASSWORD" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Rtsp.Password}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                        <StackPanel><TextBlock Text="PASSWORD" Style="{StaticResource FieldLabel}" /><PasswordBox local:PasswordBoxBinding.Password="{Binding Rtsp.Password}" Style="{StaticResource ConfigPasswordBox}" /></StackPanel>
                         <CheckBox Content="Require authentication" IsChecked="{Binding Rtsp.Authentication}" Style="{StaticResource ConfigCheckBox}" />
                         <CheckBox Content="Advertise through ONVIF" IsChecked="{Binding Rtsp.Onvif}" IsEnabled="{Binding Rtsp.HasOnvif}" Style="{StaticResource ConfigCheckBox}" />
                     </UniformGrid>
@@ -89,7 +97,7 @@
                         <StackPanel IsEnabled="{Binding Srt.HasStreamId}"><TextBlock Text="STREAM ID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.StreamId}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="PORT" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.Port}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         <StackPanel><TextBlock Text="LATENCY (MS)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.Latency}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
-                        <StackPanel><TextBlock Text="PASSWORD" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Srt.Password}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
+                        <StackPanel><TextBlock Text="PASSWORD" Style="{StaticResource FieldLabel}" /><PasswordBox local:PasswordBoxBinding.Password="{Binding Srt.Password}" Style="{StaticResource ConfigPasswordBox}" /></StackPanel>
                     </UniformGrid>
                 </Expander>
                 <Expander Margin="0,10,0,0">
@@ -252,7 +260,15 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="6,4,6,20">
                     <TabControl>
                         <TabItem Header="Main stream"><Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding Configuration.MainEncoder}" ContentTemplate="{StaticResource EncoderTemplate}" /></Border></TabItem>
-                        <TabItem Header="Sub stream"><Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding Configuration.SubEncoder}" ContentTemplate="{StaticResource EncoderTemplate}" /></Border></TabItem>
+                        <TabItem Header="Sub stream">
+                            <TabItem.Style>
+                                <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers><DataTrigger Binding="{Binding Configuration.HasSubEncoder}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                </Style>
+                            </TabItem.Style>
+                            <Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding Configuration.SubEncoder}" ContentTemplate="{StaticResource EncoderTemplate}" /></Border>
+                        </TabItem>
                     </TabControl>
                     <Border Style="{StaticResource ConfigCard}"><StackPanel>
                         <TextBlock Text="Audio encoder" FontSize="18" FontWeight="SemiBold" /><TextBlock Text="One audio encoder is shared by the main and sub streams." Foreground="{StaticResource MutedTextBrush}" FontSize="11" Margin="0,3,0,14" />
@@ -262,7 +278,7 @@
                             <StackPanel><TextBlock Text="GAIN" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Audio.Gains}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Configuration.Audio.Gain}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="SAMPLE RATE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Audio.SampleRates}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Configuration.Audio.SampleRate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="CHANNELS" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Audio.ChannelModes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Configuration.Audio.Channels}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
-                            <StackPanel><TextBlock Text="BITRATE (KB/S)" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Audio.Bitrates}" IsEditable="True" Text="{Binding Configuration.Audio.Bitrate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
+                            <StackPanel><TextBlock Text="BITRATE (KBIT/S)" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Audio.Bitrates}" IsEditable="True" Text="{Binding Configuration.Audio.Bitrate}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                         </UniformGrid>
                     </StackPanel></Border>
                 </StackPanel></ScrollViewer>
@@ -272,11 +288,19 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="6,4,6,20">
                     <TabControl>
                         <TabItem Header="Main stream"><Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding Configuration.MainStream}" ContentTemplate="{StaticResource StreamOutputTemplate}" /></Border></TabItem>
-                        <TabItem Header="Sub stream"><Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding Configuration.SubStream}" ContentTemplate="{StaticResource StreamOutputTemplate}" /></Border></TabItem>
+                        <TabItem Header="Sub stream">
+                            <TabItem.Style>
+                                <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers><DataTrigger Binding="{Binding Configuration.HasSubStream}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                                </Style>
+                            </TabItem.Style>
+                            <Border Style="{StaticResource ConfigCard}"><ContentControl Content="{Binding Configuration.SubStream}" ContentTemplate="{StaticResource StreamOutputTemplate}" /></Border>
+                        </TabItem>
                     </TabControl>
                     <Border Style="{StaticResource ConfigCard}"><StackPanel>
                         <TextBlock Text="Shared output settings" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
-                        <Expander><Expander.Header><TextBlock Text="MPEG-TS transport" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header><UniformGrid Columns="3" Margin="0,12,0,0">
+                        <Expander Visibility="{Binding Configuration.TransportVisibility}"><Expander.Header><TextBlock Text="MPEG-TS transport" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header><UniformGrid Columns="3" Margin="0,12,0,0">
                             <StackPanel><TextBlock Text="PACKET SIZE" Style="{StaticResource FieldLabel}" /><ComboBox ItemsSource="{Binding Configuration.Transport.PacketSizes}" IsEditable="True" Text="{Binding Configuration.Transport.PacketSize}" Style="{StaticResource ConfigComboBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="PID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Transport.Pid}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="PMT PID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Transport.PmtPid}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
@@ -284,13 +308,13 @@
                             <StackPanel><TextBlock Text="STREAM ID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Transport.StreamId}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="NETWORK ID" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Transport.NetworkId}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         </UniformGrid></Expander>
-                        <Expander Margin="0,10,0,0"><Expander.Header><TextBlock Text="HLS segmentation" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header><UniformGrid Columns="2" Margin="0,12,0,0">
+                        <Expander Margin="0,10,0,0" Visibility="{Binding Configuration.HlsVisibility}"><Expander.Header><TextBlock Text="HLS segmentation" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header><UniformGrid Columns="2" Margin="0,12,0,0">
                             <StackPanel><TextBlock Text="SEGMENT LENGTH (S)" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Hls.SegmentLength}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="LIST LENGTH" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Hls.ListLength}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="BASE URL" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Hls.BaseUrl}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="FILENAME FORMAT" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Hls.Filename}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                         </UniformGrid></Expander>
-                        <Expander Margin="0,10,0,0"><Expander.Header><TextBlock Text="NDI output" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header><UniformGrid Columns="2" Margin="0,12,0,0">
+                        <Expander Margin="0,10,0,0" Visibility="{Binding Configuration.NdiVisibility}"><Expander.Header><TextBlock Text="NDI output" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" /></Expander.Header><UniformGrid Columns="2" Margin="0,12,0,0">
                             <StackPanel><TextBlock Text="NDI NAME" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Ndi.Name}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <StackPanel><TextBlock Text="NDI GROUP" Style="{StaticResource FieldLabel}" /><TextBox Text="{Binding Configuration.Ndi.Group}" Style="{StaticResource ConfigTextBox}" /></StackPanel>
                             <CheckBox Content="NDI enabled" IsChecked="{Binding Configuration.Ndi.Enabled}" Style="{StaticResource ConfigCheckBox}" />

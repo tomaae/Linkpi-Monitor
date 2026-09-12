@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Linkpi_Monitor"
         mc:Ignorable="d"
-        Title="LinkPi Monitor" Icon="App.ico" Height="820" Width="1280" MinWidth="980" MinHeight="640"
+        Title="LinkPi Monitor" Icon="App.ico" Height="820" Width="1280" MinWidth="840" MinHeight="640"
         Background="{StaticResource WindowBrush}" WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded" Closing="Window_Closing" StateChanged="Window_StateChanged"
         IsVisibleChanged="Window_IsVisibleChanged">
@@ -110,7 +110,7 @@
                 <TabItem x:Name="SourcesTab" Header="Sources &amp; Streams">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel Margin="6,14,6,20">
-                            <ItemsControl ItemsSource="{Binding Channels}">
+                            <ItemsControl x:Name="ChannelItems" ItemsSource="{Binding Channels}">
                                 <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -162,7 +162,7 @@
                                                         <Button Grid.Column="0" Content="Watch" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanWatch}"
                                                                 Tag="{Binding}" Click="WatchButton_Click" ToolTip="Open the live stream inside LinkPi Monitor." />
                                                         <Button Grid.Column="2" Content="Configuration" Tag="{Binding}" Click="ConfigurationButton_Click"
-                                                                ToolTip="Open the configuration preview. Saving remains disabled." />
+                                                                ToolTip="Inspect or change this channel configuration." />
                                                     </Grid>
                                                 </StackPanel>
                                             </StackPanel>
@@ -170,17 +170,42 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <Border Padding="36" Margin="0,0,0,14"
+                                    HorizontalAlignment="Stretch">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource CardStyle}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasItems, ElementName=ChannelItems}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center" MaxWidth="520">
+                                    <TextBlock Text="No channels to show" FontSize="22" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="Add or select a LinkPi device, then refresh to load its sources and streams."
+                                               Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"
+                                               TextAlignment="Center" Margin="0,8,0,18" />
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button Content="Add device" Margin="0,0,8,0" Click="AddDeviceButton_Click" />
+                                        <Button Content="Refresh" Style="{StaticResource PrimaryButton}"
+                                                Click="RefreshButton_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
 
                 <TabItem Header="Push">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                         <StackPanel Margin="6,14,6,20">
-                            <ItemsControl ItemsSource="{Binding PushDestinations}">
+                            <ItemsControl x:Name="PushItems" ItemsSource="{Binding PushDestinations}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10" Padding="18">
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10" Padding="18" MinWidth="760">
                                             <Grid>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="1.4*" />
                                                     <ColumnDefinition Width="1.4*" /><ColumnDefinition Width="1.1*" />
@@ -197,12 +222,33 @@
                                                 <StackPanel Grid.Column="4"><TextBlock Text="DURATION" Foreground="{StaticResource MutedTextBrush}" FontSize="10" />
                                                     <TextBlock Text="{Binding Duration}" Margin="0,4,0,0" /></StackPanel>
                                                 <Button Grid.Column="5" Content="Configuration" Tag="{Binding}" Click="PushDestinationConfigurationButton_Click"
-                                                        VerticalAlignment="Center" ToolTip="Inspect this publishing destination. Saving remains disabled." />
+                                                        VerticalAlignment="Center" ToolTip="Inspect or change this publishing destination." />
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            <Border Margin="0,0,0,10" Padding="36">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource CardStyle}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasItems, ElementName=PushItems}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center" MaxWidth="520">
+                                    <TextBlock Text="No push destinations" FontSize="22" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="This device has no publishing targets to display. Refresh after adding one on the device."
+                                               Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"
+                                               TextAlignment="Center" Margin="0,8,0,18" />
+                                    <Button Content="Refresh" Style="{StaticResource PrimaryButton}"
+                                            HorizontalAlignment="Center" Click="RefreshButton_Click" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

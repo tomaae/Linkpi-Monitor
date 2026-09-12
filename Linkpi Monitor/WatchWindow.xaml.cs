@@ -73,6 +73,7 @@ public partial class WatchWindow : Window
         _mediaPlayer.Vout += (_, args) =>
         {
             _hasVideoOutput = args.Count > 0;
+            ApplySnapshotButtonState();
             ApplyConfiguredAspectRatio();
             RefreshAspectRatioFromPlayer();
         };
@@ -148,7 +149,7 @@ public partial class WatchWindow : Window
 
     private void VideoOverlay_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        CopyImageMenuItem.IsEnabled = _hasVideoOutput && !_isClosing && !_snapshotBusy;
+        CopyImageMenuItem.IsEnabled = CanCaptureSnapshot();
         SaveImageMenuItem.IsEnabled = CopyImageMenuItem.IsEnabled;
     }
 
@@ -160,6 +161,7 @@ public partial class WatchWindow : Window
     {
         if (_snapshotBusy || _isClosing || !_hasVideoOutput) return Task.CompletedTask;
         _snapshotBusy = true;
+        ApplySnapshotButtonState();
         return _snapshotOperation = ProcessSnapshotAsync(saveToFile);
     }
 
@@ -188,7 +190,26 @@ public partial class WatchWindow : Window
         {
             if (!_isClosing) ShowSnapshotError(saveToFile ? "The frame could not be saved." : "The frame could not be copied.", exception);
         }
-        finally { _snapshotBusy = false; }
+        finally
+        {
+            _snapshotBusy = false;
+            ApplySnapshotButtonState();
+        }
+    }
+
+    private bool CanCaptureSnapshot() => _hasVideoOutput && !_isClosing && !_snapshotBusy;
+
+    private void ApplySnapshotButtonState()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke((Action)ApplySnapshotButtonState);
+            return;
+        }
+
+        var canCapture = CanCaptureSnapshot();
+        CopyFrameButton.IsEnabled = canCapture;
+        SaveFrameButton.IsEnabled = canCapture;
     }
 
     private string? ChooseSnapshotPath()

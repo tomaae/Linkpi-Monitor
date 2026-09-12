@@ -24,7 +24,11 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse x:Name="PlaybackStatusDot" Width="8" Height="8" Fill="#F5B82E" />
                     <TextBlock x:Name="PlaybackStatusText" Text="Opening stream" Margin="7,0,0,0" />
-                    <Button x:Name="MuteButton" Content="Mute" Width="82" Margin="18,0,0,0" Padding="12,7"
+                    <Button x:Name="CopyFrameButton" Content="Copy frame" IsEnabled="False" Margin="14,0,0,0"
+                            Click="CopyImageMenuItem_Click" ToolTip="Copy the current full-resolution frame" />
+                    <Button x:Name="SaveFrameButton" Content="Save frame…" IsEnabled="False" Margin="8,0,0,0"
+                            Click="SaveImageMenuItem_Click" ToolTip="Save the current full-resolution frame as PNG" />
+                    <Button x:Name="MuteButton" Content="Mute" Width="82" Margin="8,0,0,0" Padding="12,7"
                             Click="MuteButton_Click" ToolTip="Mute this live view" />
                 </StackPanel>
             </Grid>

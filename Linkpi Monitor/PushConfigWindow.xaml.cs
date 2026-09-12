@@ -26,6 +26,7 @@ public partial class PushConfigWindow : Window
             ? _configuration.Destinations.FirstOrDefault()
             : _configuration.Destinations.FirstOrDefault(destination =>
                 destination.OriginalIndex == selectedDestination.OriginalIndex);
+        UpdateActionState();
     }
 
     private void AddDestinationButton_Click(object sender, RoutedEventArgs e)
@@ -40,6 +41,7 @@ public partial class PushConfigWindow : Window
         };
         _configuration.Destinations.Add(destination);
         DestinationTabs.SelectedItem = destination;
+        UpdateActionState();
     }
 
     private void RemoveDestinationButton_Click(object sender, RoutedEventArgs e)
@@ -47,7 +49,24 @@ public partial class PushConfigWindow : Window
         if (DestinationTabs.SelectedItem is PushDestinationConfiguration destination)
         {
             _configuration.Destinations.Remove(destination);
+            UpdateActionState();
         }
+    }
+
+    private void DestinationTabs_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
+        UpdateActionState();
+
+    private void UpdateActionState()
+    {
+        if (AddButton is null || RemoveButton is null || SaveButton is null || CloseButton is null)
+        {
+            return;
+        }
+
+        AddButton.IsEnabled = !_isSaving;
+        RemoveButton.IsEnabled = !_isSaving && DestinationTabs.SelectedItem is not null;
+        SaveButton.IsEnabled = !_isSaving;
+        CloseButton.IsEnabled = !_isSaving;
     }
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -71,11 +90,8 @@ public partial class PushConfigWindow : Window
             return;
         }
 
-        SaveButton.IsEnabled = false;
-        AddButton.IsEnabled = false;
-        RemoveButton.IsEnabled = false;
-        CloseButton.IsEnabled = false;
         _isSaving = true;
+        UpdateActionState();
         try
         {
             await _client.SavePushConfigurationAsync(_configuration);
@@ -93,10 +109,7 @@ public partial class PushConfigWindow : Window
             _isSaving = false;
             if (IsVisible)
             {
-                SaveButton.IsEnabled = true;
-                AddButton.IsEnabled = true;
-                RemoveButton.IsEnabled = true;
-                CloseButton.IsEnabled = true;
+                UpdateActionState();
             }
         }
     }
