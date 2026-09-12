@@ -356,24 +356,41 @@ public sealed class LinkPiClient : IDisposable
 
     public async Task<LinkPiSnapshot> GetSnapshotAsync(CancellationToken cancellationToken, bool includePreviews = true)
     {
-        var configTask = GetJsonAsync("config/config.json", cancellationToken);
-        var pushConfigTask = GetJsonAsync("config/push.json", cancellationToken);
-        var systemTask = InvokeRpcAsync("RPC", "enc.getSysState", cancellationToken);
-        var inputTask = InvokeRpcAsync("RPC", "enc.getInputState", cancellationToken);
-        var epgTask = InvokeRpcAsync("RPC", "enc.getEPG", cancellationToken);
-        var pushStateTask = InvokeRpcAsync("RPC", "push.getState", cancellationToken);
-        var hardwareTask = GetOptionalJsonAsync("config/hardware.json", cancellationToken);
+        var configTask = ObserveAsync(GetJsonAsync("config/config.json", cancellationToken), "Channel configuration", cancellationToken);
+        var pushConfigTask = ObserveAsync(GetJsonAsync("config/push.json", cancellationToken), "Push configuration", cancellationToken);
+        var systemTask = ObserveAsync(InvokeRpcAsync("RPC", "enc.getSysState", cancellationToken), "System metrics", cancellationToken);
+        var inputTask = ObserveAsync(InvokeRpcAsync("RPC", "enc.getInputState", cancellationToken), "Input state", cancellationToken);
+        var epgTask = ObserveAsync(InvokeRpcAsync("RPC", "enc.getEPG", cancellationToken), "Stream discovery", cancellationToken);
+        var pushStateTask = ObserveAsync(InvokeRpcAsync("RPC", "push.getState", cancellationToken), "Push state", cancellationToken);
+        var hardwareTask = ObserveAsync(GetOptionalJsonAsync("config/hardware.json", cancellationToken), "Hardware capabilities", cancellationToken);
 
         await Task.WhenAll(configTask, pushConfigTask, systemTask, inputTask, epgTask, pushStateTask, hardwareTask)
             .ConfigureAwait(false);
 
-        var system = await systemTask;
-        var rawConfig = await configTask;
-        var rawPushConfig = await pushConfigTask;
-        var rawHardware = await hardwareTask;
-        var channels = ParseChannels(rawConfig, await inputTask, await epgTask, rawHardware);
+        var configResult = await configTask;
+        if (configResult.Error is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(configResult.Error).Throw();
+        }
+
+        var pushConfigResult = await pushConfigTask;
+        var systemResult = await systemTask;
+        var inputResult = await inputTask;
+        var epgResult = await epgTask;
+        var pushStateResult = await pushStateTask;
+        var hardwareResult = await hardwareTask;
+        var warnings = new[] { pushConfigResult, systemResult, inputResult, epgResult, pushStateResult, hardwareResult }
+            .Where(result => result.Error is not null)
+            .Select(result => $"{result.Name} unavailable: {GetConciseMessage(result.Error!)}")
+            .ToArray();
+
+        var rawConfig = configResult.Value;
+        var rawPushConfig = pushConfigResult.Value;
+        var system = systemResult.Value;
+        var rawHardware = hardwareResult.Value;
+        var channels = ParseChannels(rawConfig, inputResult.Value, epgResult.Value, rawHardware);
         if (includePreviews) await LoadPreviewImagesAsync(channels, cancellationToken).ConfigureAwait(false);
-        var pushState = await pushStateTask;
+        var pushState = pushStateResult.Value;
         var pushConfiguration = ParsePushConfiguration(rawPushConfig, channels, rawHardware);
 
         return new LinkPiSnapshot
@@ -385,9 +402,37 @@ public sealed class LinkPiClient : IDisposable
             PushDestinations = ParsePushDestinations(pushConfiguration, pushState, channels),
             PushConfiguration = pushConfiguration,
             Hardware = ParseHardwareConfiguration(rawConfig, rawHardware, channels),
-            IsPushing = GetBool(pushState, "pushing")
+            IsPushing = GetBool(pushState, "pushing"),
+            HasSystemMetrics = systemResult.Error is null,
+            Warnings = warnings
         };
     }
+
+    private static async Task<QueryResult> ObserveAsync(
+        Task<JsonElement> request,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new QueryResult(name, await request.ConfigureAwait(false), null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return new QueryResult(name, default, exception);
+        }
+    }
+
+    private static string GetConciseMessage(Exception exception) => exception switch
+    {
+        TaskCanceledException => "request timed out",
+        HttpRequestException { StatusCode: not null } http => $"HTTP {(int)http.StatusCode.Value}",
+        _ => exception.Message
+    };
 
     private async Task<JsonElement> GetJsonAsync(
         string relativeUrl,
@@ -722,6 +767,7 @@ public sealed class LinkPiClient : IDisposable
             var encoder = GetObject(channel, "encv");
             var audio = GetObject(channel, "enca");
             var stream = GetObject(channel, "stream");
+            var subStream = GetObject(channel, "stream2");
             var canPreview = CanPreview(channel);
             epgById.TryGetValue(id, out var epgEntry);
             inputStates.TryGetValue(id, out var sourceState);
@@ -741,7 +787,7 @@ public sealed class LinkPiClient : IDisposable
                 Initial = string.IsNullOrWhiteSpace(name) ? id.ToString(CultureInfo.InvariantCulture) : name[..1].ToUpperInvariant(),
                 VideoSummary = GetVideoSummary(encoder),
                 AudioSummary = GetAudioSummary(audio),
-                OutputsSummary = GetOutputsSummary(stream),
+                OutputsSummary = GetOutputsSummary(stream, subStream),
                 PreviewMessage = !enabled
                     ? "Stream is disabled"
                     : canPreview ? "Loading snapshot…" : "Preview unavailable",
@@ -1194,7 +1240,8 @@ public sealed class LinkPiClient : IDisposable
 
         var configuration = new PushConfiguration
         {
-            OriginalDestinationsJson = pushConfig.TryGetProperty("url", out var originalDestinations) &&
+            OriginalDestinationsJson = pushConfig.ValueKind == JsonValueKind.Object &&
+                pushConfig.TryGetProperty("url", out var originalDestinations) &&
                 originalDestinations.ValueKind == JsonValueKind.Array ? originalDestinations.GetRawText() : null,
             Autorun = GetBool(pushConfig, "autorun"),
             AutorunStoredAsString = PropertyIsString(pushConfig, "autorun"),
@@ -1203,7 +1250,8 @@ public sealed class LinkPiClient : IDisposable
             Types = types
         };
 
-        if (!pushConfig.TryGetProperty("url", out var destinations) || destinations.ValueKind != JsonValueKind.Array)
+        if (pushConfig.ValueKind != JsonValueKind.Object ||
+            !pushConfig.TryGetProperty("url", out var destinations) || destinations.ValueKind != JsonValueKind.Array)
         {
             return configuration;
         }
@@ -1238,7 +1286,8 @@ public sealed class LinkPiClient : IDisposable
         JsonElement pushState,
         IReadOnlyList<ChannelDisplay> channels)
     {
-        var runtimeStatuses = pushState.TryGetProperty("status", out var statuses) && statuses.ValueKind == JsonValueKind.Array
+        var runtimeStatuses = pushState.ValueKind == JsonValueKind.Object &&
+            pushState.TryGetProperty("status", out var statuses) && statuses.ValueKind == JsonValueKind.Array
             ? statuses.EnumerateArray().ToArray()
             : [];
         var globallyPushing = GetBool(pushState, "pushing");
@@ -1410,7 +1459,7 @@ public sealed class LinkPiClient : IDisposable
             return available ? ("Online", OnlineBrush) : ("No signal", WarningBrush);
         }
 
-        return ("Enabled", OnlineBrush);
+        return ("Status unknown", OfflineBrush);
     }
 
     private Uri? GetWatchUri(JsonElement epgEntry)
@@ -1470,14 +1519,25 @@ public sealed class LinkPiClient : IDisposable
             : $"{codec.ToUpperInvariant()}  ·  {bitrate} kbps  ·  {samplerate / 1000d:0.#} kHz";
     }
 
-    private static string GetOutputsSummary(JsonElement stream)
+    private static string GetOutputsSummary(JsonElement stream, JsonElement subStream)
     {
-        if (stream.ValueKind != JsonValueKind.Object)
+        var outputs = GetEnabledOutputs(stream);
+        var subOutputs = GetEnabledOutputs(subStream);
+        if (subOutputs.Count == 0)
         {
-            return "No outputs";
+            return outputs.Count == 0 ? "No outputs" : string.Join("  ·  ", outputs);
         }
+        if (outputs.Count == 0)
+        {
+            return $"Sub: {string.Join("  ·  ", subOutputs)}";
+        }
+        return $"Main: {string.Join("  ·  ", outputs)}  ·  Sub: {string.Join("  ·  ", subOutputs)}";
+    }
 
+    private static List<string> GetEnabledOutputs(JsonElement stream)
+    {
         var outputs = new List<string>();
+        if (stream.ValueKind != JsonValueKind.Object) return outputs;
         foreach (var name in new[] { "http", "hls", "rtmp", "rtsp", "srt", "udp", "webrtc", "rist" })
         {
             if (stream.TryGetProperty(name, out var value) && IsEnabled(value))
@@ -1486,7 +1546,7 @@ public sealed class LinkPiClient : IDisposable
             }
         }
 
-        return outputs.Count == 0 ? "No outputs" : string.Join("  ·  ", outputs);
+        return outputs;
     }
 
     private static bool IsEnabled(JsonElement value)
@@ -1623,4 +1683,6 @@ public sealed class LinkPiClient : IDisposable
     {
         public AuthenticationExpiredException() : base("The LinkPi authentication session expired.") { }
     }
+
+    private readonly record struct QueryResult(string Name, JsonElement Value, Exception? Error);
 }

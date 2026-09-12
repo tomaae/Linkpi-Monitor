@@ -14,6 +14,8 @@ public sealed class LinkPiSnapshot
     public required PushConfiguration PushConfiguration { get; init; }
     public required HardwareConfiguration Hardware { get; init; }
     public bool IsPushing { get; init; }
+    public bool HasSystemMetrics { get; init; } = true;
+    public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
 public sealed class ChannelDisplay : ConfigurationSection

@@ -243,7 +243,7 @@ public sealed class LinkPiClientEdgeCaseTests
 
         Assert.Equal(0, channel.Id);
         Assert.Equal("0", channel.Initial);
-        Assert.Equal("Enabled", channel.Status);
+        Assert.Equal("Status unknown", channel.Status);
         Assert.Equal("Video disabled", channel.VideoSummary);
         Assert.Equal("HTTP  ·  HLS  ·  RTMP  ·  RTSP", channel.OutputsSummary);
         Assert.True(snapshot.PushConfiguration.Autorun);

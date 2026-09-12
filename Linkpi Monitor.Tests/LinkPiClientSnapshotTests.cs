@@ -63,7 +63,7 @@ public sealed class LinkPiClientSnapshotTests
         Assert.Equal("Network decoder", network.SourceType);
         Assert.Equal("H265  ·  3840×2160  ·  25 fps  ·  8000 kbps", network.VideoSummary);
         Assert.Equal("AAC  ·  128 kbps  ·  48 kHz", network.AudioSummary);
-        Assert.Equal("HTTP  ·  HLS  ·  RTSP  ·  SRT  ·  UDP  ·  RIST", network.OutputsSummary);
+        Assert.Equal("Main: HTTP  ·  HLS  ·  RTSP  ·  SRT  ·  UDP  ·  RIST  ·  Sub: RTSP", network.OutputsSummary);
         Assert.Equal("Snapshot unavailable", network.PreviewMessage);
         Assert.True(network.Configuration.Decode.IsNetworkSource);
         Assert.Equal("srt://source.test:9000", network.Configuration.Decode.SourceUrl);
@@ -410,17 +410,34 @@ public sealed class LinkPiClientSnapshotTests
     }
 
     [Fact]
-    public async Task RpcErrorIncludesFailingMethod()
+    public async Task RpcErrorIsReportedAsADegradedSubsystem()
     {
         var handler = SnapshotHandler("[]");
         handler.RpcResponses["enc.getSysState"] = "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-1,\"message\":\"bad\"}}";
         using var client = new LinkPiClient(TestDevices.Default, handler);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            client.GetSnapshotAsync(CancellationToken.None));
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None);
 
-        Assert.Contains("enc.getSysState", exception.Message);
-        Assert.Contains("bad", exception.Message);
+        Assert.False(snapshot.HasSystemMetrics);
+        var warning = Assert.Single(snapshot.Warnings, value => value.StartsWith("System metrics", StringComparison.Ordinal));
+        Assert.Contains("enc.getSysState", warning);
+        Assert.Contains("bad", warning);
+    }
+
+    [Fact]
+    public async Task PushFailureDoesNotDiscardChannelsOrSystemMetrics()
+    {
+        var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"name\":\"HDMI\",\"enable\":true}]");
+        handler.RpcResults["enc.getSysState"] = "{\"cpu\":21,\"mem\":34,\"temperature\":45}";
+        handler.RpcResponses["push.getState"] = "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"message\":\"offline\"}}";
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var snapshot = await client.GetSnapshotAsync(CancellationToken.None, includePreviews: false);
+
+        Assert.Single(snapshot.Channels);
+        Assert.True(snapshot.HasSystemMetrics);
+        Assert.Equal(21, snapshot.CpuPercent);
+        Assert.Contains(snapshot.Warnings, warning => warning.StartsWith("Push state", StringComparison.Ordinal));
     }
 
     [Fact]

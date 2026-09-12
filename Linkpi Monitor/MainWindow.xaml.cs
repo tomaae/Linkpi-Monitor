@@ -42,6 +42,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private PushConfiguration? _pushConfiguration;
     private HardwareConfiguration? _hardware;
     private string _deviceModelDisplay = "No device selected";
+    private string _lastUpdatedDisplay = "Never updated";
     private bool _holdHardwareConfiguration;
 
     public MainWindow()
@@ -75,6 +76,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         get => _deviceModelDisplay;
         private set => SetField(ref _deviceModelDisplay, value);
+    }
+
+    public string LastUpdatedDisplay
+    {
+        get => _lastUpdatedDisplay;
+        private set => SetField(ref _lastUpdatedDisplay, value);
     }
 
     public string ConnectionStatus
@@ -393,6 +400,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            RefreshButton.IsEnabled = false;
+            RefreshButton.Content = "Refreshing…";
             var includePreviews = IsVisible && WindowState != WindowState.Minimized && MainTabs.SelectedItem == SourcesTab;
             var snapshot = await client.GetSnapshotAsync(cancellationToken, includePreviews);
             cancellationToken.ThrowIfCancellationRequested();
@@ -409,12 +418,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             DeviceModelDisplay = string.IsNullOrWhiteSpace(snapshot.Hardware.Model)
                 ? DevicePicker.SelectedItem is DeviceSettings selectedDevice ? selectedDevice.Name : "Unknown LinkPi model"
                 : snapshot.Hardware.Model;
-            CpuDisplay = $"{snapshot.CpuPercent}%";
-            MemoryDisplay = $"{snapshot.MemoryPercent}%";
-            TemperatureDisplay = $"{snapshot.TemperatureCelsius} °C";
-            ConnectionStatus = "Online";
-            ConnectionBrush = OnlineBrush;
-            ErrorMessage = string.Empty;
+            CpuDisplay = snapshot.HasSystemMetrics ? $"{snapshot.CpuPercent}%" : "—";
+            MemoryDisplay = snapshot.HasSystemMetrics ? $"{snapshot.MemoryPercent}%" : "—";
+            TemperatureDisplay = snapshot.HasSystemMetrics ? $"{snapshot.TemperatureCelsius} °C" : "—";
+            ConnectionStatus = snapshot.Warnings.Count == 0 ? "Online" : "Online · limited";
+            ConnectionBrush = snapshot.Warnings.Count == 0 ? OnlineBrush : BusyBrush;
+            ErrorMessage = snapshot.Warnings.Count == 0
+                ? string.Empty
+                : "Some device information is temporarily unavailable.\n" + string.Join("\n", snapshot.Warnings);
+            LastUpdatedDisplay = $"Updated {DateTime.Now:t}";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -426,6 +438,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            if (!_isClosing)
+            {
+                RefreshButton.IsEnabled = true;
+                RefreshButton.Content = "Refresh";
+            }
             if (ReferenceEquals(_refreshCancellation, cancellation)) _refreshCancellation = null;
         }
     }
