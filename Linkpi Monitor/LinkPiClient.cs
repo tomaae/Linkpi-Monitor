@@ -1191,6 +1191,11 @@ public sealed class LinkPiClient : IDisposable
 
             channel.PreviewImage = image;
             channel.PreviewMessage = string.Empty;
+            if (channel.Status == "Status unknown")
+            {
+                channel.Status = "Online";
+                channel.StatusBrush = OnlineBrush;
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

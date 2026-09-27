@@ -349,6 +349,29 @@ public sealed class LinkPiClientSnapshotTests
     }
 
     [Fact]
+    public async Task SuccessfulPreviewMarksUnreportedChannelsOnlineWithoutHidingExplicitNoSignal()
+    {
+        var handler = SnapshotHandler("""
+            [
+              {"id":2,"type":"net","name":"Network","enable":true,"net":{"decodeV":true},"encv":{},"enca":{}},
+              {"id":8,"type":"mix","name":"Mix","enable":true,"encv":{},"enca":{}},
+              {"id":0,"type":"vi","name":"HDMI","enable":true,"encv":{},"enca":{}}
+            ]
+            """);
+        handler.RpcResults["enc.getInputState"] = "[{\"chnId\":0,\"avalible\":false}]";
+        handler.Previews[2] = new PreviewResponse(TestDevices.OnePixelPng);
+        handler.Previews[8] = new PreviewResponse(TestDevices.OnePixelPng);
+        handler.Previews[0] = new PreviewResponse(TestDevices.OnePixelPng);
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var channels = (await client.GetSnapshotAsync(CancellationToken.None)).Channels;
+
+        Assert.Equal("Online", channels.Single(channel => channel.Id == 2).Status);
+        Assert.Equal("Online", channels.Single(channel => channel.Id == 8).Status);
+        Assert.Equal("No signal", channels.Single(channel => channel.Id == 0).Status);
+    }
+
+    [Fact]
     public async Task RejectsPreviewWithAdvertisedOversizedContent()
     {
         var handler = SnapshotHandler("[{\"id\":0,\"type\":\"vi\",\"name\":\"HDMI\",\"enable\":true}]");
