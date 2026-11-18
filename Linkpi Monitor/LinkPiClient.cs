@@ -33,8 +33,7 @@ public sealed class LinkPiClient : IDisposable
         : this(device, new HttpClientHandler
         {
             CookieContainer = new System.Net.CookieContainer(),
-            // Configuration writes can contain credentials and stream keys. Redirects are
-            // deliberately handled as errors so a device cannot forward those requests.
+            // Handle login's dashboard redirect explicitly so credentials and configuration writes are never forwarded.
             AllowAutoRedirect = false
         })
     {
@@ -83,14 +82,7 @@ public sealed class LinkPiClient : IDisposable
                     ["password"] = _device.Password
                 }),
                 deadline.Token).ConfigureAwait(false);
-            ValidateResponseOrigin(response);
-            if (response.RequestMessage?.RequestUri?.AbsolutePath.EndsWith("login.php", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                throw new InvalidOperationException("LinkPi authentication failed.");
-            }
-            RejectRedirect(response);
-            response.EnsureSuccessStatusCode();
-
+            ValidateAuthenticationResponse(response);
             _authenticated = true;
         }
         finally
@@ -99,10 +91,40 @@ public sealed class LinkPiClient : IDisposable
         }
     }
 
-    private void ValidateResponseOrigin(HttpResponseMessage response)
+    private void ValidateAuthenticationResponse(HttpResponseMessage response)
+    {
+        ValidateResponseOrigin(response);
+        var uri = response.RequestMessage!.RequestUri!;
+
+        if ((int)response.StatusCode is >= 300 and < 400 &&
+            response.Headers.Location is { } location && Uri.TryCreate(uri, location, out var target))
+        {
+            ValidateDeviceOrigin(target);
+            if (response.StatusCode is HttpStatusCode.Found or HttpStatusCode.SeeOther &&
+                target.AbsoluteUri == new Uri(_httpClient.BaseAddress!, "dashboard.php").AbsoluteUri)
+            {
+                return;
+            }
+
+            uri = target;
+        }
+
+        if (uri.AbsolutePath.EndsWith("login.php", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("LinkPi authentication failed.");
+        }
+
+        RejectRedirect(response);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private void ValidateResponseOrigin(HttpResponseMessage response) =>
+        ValidateDeviceOrigin(response.RequestMessage?.RequestUri);
+
+    private void ValidateDeviceOrigin(Uri? uri)
     {
         var expected = _httpClient.BaseAddress!;
-        if (response.RequestMessage?.RequestUri is not { } uri ||
+        if (uri is null ||
             !uri.Scheme.Equals(expected.Scheme, StringComparison.OrdinalIgnoreCase) ||
             !uri.Host.Equals(expected.Host, StringComparison.OrdinalIgnoreCase) ||
             uri.Port != expected.Port)

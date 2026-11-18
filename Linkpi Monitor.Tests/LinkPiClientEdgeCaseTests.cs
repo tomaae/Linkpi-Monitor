@@ -329,6 +329,60 @@ public sealed class LinkPiClientEdgeCaseTests
             client.GetSnapshotAsync(CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.Found, "/dashboard.php")]
+    [InlineData(HttpStatusCode.SeeOther, "http://linkpi.test/dashboard.php")]
+    public async Task LoginDashboardRedirectAllowsChannelSaveWithoutFollowingIt(HttpStatusCode statusCode, string location)
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = "[{\"id\":0}]",
+            Override = request => request.Path == "/link/action.php"
+                ? new HttpResponseMessage(statusCode)
+                {
+                    Headers = { Location = new Uri(location, UriKind.RelativeOrAbsolute) }
+                }
+                : null
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        await client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [("GET", "/config/config.json"), ("POST", "/link/action.php"), ("POST", "/link/relay.php")],
+            handler.Requests.Select(request => (request.Method, request.Path)));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Found, "/link/login.php?retry=1", "authentication failed")]
+    [InlineData(HttpStatusCode.Found, "http://other.test/dashboard.php", "unexpected host")]
+    [InlineData(HttpStatusCode.Found, "https://linkpi.test/dashboard.php", "unexpected host")]
+    [InlineData(HttpStatusCode.Found, "http://linkpi.test:8080/dashboard.php", "unexpected host")]
+    [InlineData(HttpStatusCode.Found, "/other.php", "unexpected redirect")]
+    [InlineData(HttpStatusCode.TemporaryRedirect, "/dashboard.php", "unexpected redirect")]
+    [InlineData(HttpStatusCode.Found, null, "unexpected redirect")]
+    public async Task UnexpectedLoginRedirectPreventsChannelSave(
+        HttpStatusCode statusCode, string? location, string message)
+    {
+        var handler = new LinkPiTestHandler
+        {
+            ConfigJson = "[{\"id\":0}]",
+            Override = request => request.Path == "/link/action.php"
+                ? new HttpResponseMessage(statusCode)
+                {
+                    Headers = { Location = location is null ? null : new Uri(location, UriKind.RelativeOrAbsolute) }
+                }
+                : null
+        };
+        using var client = new LinkPiClient(TestDevices.Default, handler);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.SaveChannelConfigurationAsync(0, new ChannelConfiguration(), TestContext.Current.CancellationToken));
+
+        Assert.Contains(message, exception.Message);
+        Assert.Equal(["/config/config.json", "/link/action.php"], handler.Requests.Select(request => request.Path));
+    }
+
     [Fact]
     public async Task SameOriginHttpRedirectIsRejectedInsteadOfFollowed()
     {

@@ -156,7 +156,7 @@ LinkPi firmware exposes a mixture of JSON configuration documents, JSON-RPC meth
 - The authenticated default-configuration update relay for channel and hardware saves
 - `push.update` for Push configuration saves
 
-Monitoring does not invoke update, start, or stop operations. Optional endpoint and per-channel snapshot failures are isolated so one unavailable source does not fail the entire refresh. Configuration responses are accepted only from the configured device origin; cross-origin redirects and HTTPS-to-HTTP downgrades are rejected. Authentication is retried once when a saved session expires.
+Monitoring does not invoke update, start, or stop operations. Optional endpoint and per-channel snapshot failures are isolated so one unavailable source does not fail the entire refresh. Configuration responses are accepted only from the configured device origin. Login accepts a same-origin redirect to `dashboard.php` without following it. Cross-origin redirects and redirects from configuration writes are rejected. Authentication is retried once when a saved session expires.
 
 Monitoring continues while the window is minimized or another tab is selected, but preview generation and image downloads run only while Sources & Streams is visible. Returning to that view requests fresh previews.
 
