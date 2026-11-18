@@ -6,13 +6,16 @@ namespace Linkpi_Monitor;
 
 public partial class StreamConfigWindow : Window
 {
+    private readonly ChannelConfiguration _configuration;
     private readonly string _baseline;
 
     public StreamConfigWindow(ChannelDisplay channel, LinkPiClient client)
     {
         InitializeComponent();
-        DataContext = channel.CreateEditableCopy();
-        _baseline = JsonSerializer.Serialize(DataContext);
+        var editableChannel = channel.CreateEditableCopy();
+        DataContext = editableChannel;
+        _configuration = editableChannel.Configuration;
+        _baseline = JsonSerializer.Serialize(_configuration);
         Title = $"{channel.Name} configuration";
         Editor.SaveAsync = configuration => client.SaveChannelConfigurationAsync(channel.Id, configuration);
     }
@@ -25,7 +28,7 @@ public partial class StreamConfigWindow : Window
             return;
         }
 
-        if (DialogResult == true || JsonSerializer.Serialize(DataContext) == _baseline)
+        if (DialogResult == true || JsonSerializer.Serialize(_configuration) == _baseline)
         {
             return;
         }
